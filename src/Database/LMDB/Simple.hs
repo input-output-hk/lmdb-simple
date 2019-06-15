@@ -1,7 +1,7 @@
 
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
-
 {-|
 Module      : Database.LMDB.Simple
 Description : Simple Haskell API for LMDB
@@ -86,16 +86,23 @@ import Control.Concurrent
   )
 
 import Control.Exception
-  ( Exception
+  ( SomeException
+  , Exception
   , throwIO
   , try
   , tryJust
   , bracketOnError
   )
 
+import qualified Control.Exception as EUnsafe
+
 import Control.Monad
   ( guard
   , void
+  )
+
+import Control.Monad.IO.Unlift
+  ( MonadUnliftIO (..)
   )
 
 import Data.Coerce
@@ -140,6 +147,26 @@ import Foreign.C
   ( Errno (Errno)
   , eNOTDIR
   )
+
+-- | Like UnliftIO.Exception.bracket but allows different actions on exception
+-- vs normal return.
+bracket2 :: MonadUnliftIO m => m a -> (a -> m b) -> (a -> m b') -> (a -> m c) -> m c
+bracket2 before afterE afterR thing = withRunInIO $ \run -> EUnsafe.mask $ \restore -> do
+  x <- run before
+  res1 <- EUnsafe.try $ restore $ run $ thing x
+  case res1 of
+    Left (e1 :: SomeException) -> do
+      -- explicitly ignore exceptions from after. We know that
+      -- no async exceptions were thrown there, so therefore
+      -- the stronger exception must come from thing
+      --
+      -- https://github.com/fpco/safe-exceptions/issues/2
+      _ :: Either SomeException b <-
+          EUnsafe.try $ EUnsafe.uninterruptibleMask_ $ run $ afterE x
+      EUnsafe.throwIO e1
+    Right y -> do
+      _ <- EUnsafe.uninterruptibleMask_ $ run $ afterR x
+      return y
 
 -- | LMDB environments have various limits on the size and number of databases
 -- and concurrent readers.
@@ -263,8 +290,7 @@ transaction (Env env) tx@(Txn tf)
   | isReadOnlyTransaction tx = run True
   | otherwise                = runInBoundThread (run False)
   where run readOnly =
-          bracketOnError (mdb_txn_begin env Nothing readOnly) mdb_txn_abort $
-          \txn -> tf txn >>= \result -> mdb_txn_commit txn >> return result
+          bracket2 (mdb_txn_begin env Nothing readOnly) mdb_txn_abort mdb_txn_commit tf
 
 -- | The exception type thrown when a (top-level) transaction is explicitly
 -- aborted

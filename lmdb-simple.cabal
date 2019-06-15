@@ -37,13 +37,14 @@ library
   exposed-modules:     Database.LMDB.Simple
                        Database.LMDB.Simple.DBRef
                        Database.LMDB.Simple.Extra
+                       Database.LMDB.Simple.Internal
                        Database.LMDB.Simple.View
-  other-modules:       Database.LMDB.Simple.Internal
 
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , lmdb >= 0.2 && < 0.3
                      , serialise >= 0.2 && < 0.3
+                     , unliftio-core
   ghc-options:         -Wall -Wno-name-shadowing -Wno-unused-do-bind
   default-language:    Haskell2010
   default-extensions:  Trustworthy
