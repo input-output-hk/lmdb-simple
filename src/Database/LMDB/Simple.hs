@@ -81,8 +81,9 @@ module Database.LMDB.Simple
   , SubMode
   ) where
 
-import Control.Concurrent
-  ( runInBoundThread
+import Control.Concurrent.Async
+  ( withAsyncBound
+  , wait
   )
 
 import Control.Exception
@@ -237,10 +238,16 @@ openEnvironment path limits = do
           | Errno (fromIntegral code) == eNOTDIR = True
         isNotDirectoryError _                    = False
 
+-- | Version of @runInBoundThread@ that may be safely interrupted.
+--
+-- See https://github.com/verement/lmdb-simple/issues/6
+runInBoundThread' :: IO a -> IO a
+runInBoundThread' action = withAsyncBound action wait
+
 -- | Closes an open envrionment. After calling this function, the
 -- environment should *not* be used again.
 closeEnvironment :: Mode mode => Environment mode -> IO ()
-closeEnvironment (Env mdb_env) = runInBoundThread $ mdb_env_close mdb_env
+closeEnvironment (Env mdb_env) = runInBoundThread' $ mdb_env_close mdb_env
 
 -- | Convenience function for opening an LMDB environment in 'ReadWrite'
 -- mode; see 'openEnvironment'
@@ -288,7 +295,7 @@ transaction :: (Mode tmode, SubMode emode tmode)
             => Environment emode -> Transaction tmode a -> IO a
 transaction (Env env) tx@(Txn tf)
   | isReadOnlyTransaction tx = run True
-  | otherwise                = runInBoundThread (run False)
+  | otherwise                = runInBoundThread' (run False)
   where run readOnly =
           bracket2 (mdb_txn_begin env Nothing readOnly) mdb_txn_abort mdb_txn_commit tf
 
