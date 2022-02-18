@@ -52,6 +52,7 @@ module Database.LMDB.Simple
   , defaultLimits
   , openEnvironment
   , closeEnvironment
+  , closeEnvironmentBlocking
   , openReadWriteEnvironment
   , openReadOnlyEnvironment
   , readOnlyEnvironment
@@ -85,6 +86,8 @@ import Control.Concurrent.Async
   ( withAsyncBound
   , wait
   )
+
+import Control.Concurrent.MVar
 
 import Control.Exception
   ( SomeException
@@ -215,8 +218,15 @@ defaultLimits = Limits
 -- An environment opened in 'ReadOnly' mode may still modify the reader lock
 -- table (except when the filesystem is read-only, in which case no locks are
 -- used).
-openEnvironment :: Mode mode => FilePath -> Limits -> IO (Environment mode)
-openEnvironment path limits = do
+openEnvironment :: forall mode. Mode mode => FilePath -> Limits -> IO (Environment mode)
+openEnvironment = openEnvironmentWithFlags flags where
+  flags = [MDB_RDONLY | isReadOnlyEnvironment (undefined :: Environment mode)]
+
+
+-- | As 'openEnvironment' but using explicit LMDB environment flags.
+-- No effort is made to validate the flags.
+openEnvironmentWithFlags :: Mode mode => [MDB_EnvFlag] -> FilePath -> Limits -> IO (Environment mode)
+openEnvironmentWithFlags flags path limits = do
   env <- mdb_env_create
 
   mdb_env_set_mapsize    env (mapSize      limits)
@@ -224,7 +234,6 @@ openEnvironment path limits = do
   mdb_env_set_maxreaders env (maxReaders   limits)
 
   let environ = Env env :: Mode mode => Environment mode
-      flags   = [MDB_RDONLY | isReadOnlyEnvironment environ]
 
   r <- tryJust (guard . isNotDirectoryError) $ mdb_env_open env path flags
   case r of
@@ -248,6 +257,17 @@ runInBoundThread' action = withAsyncBound action wait
 -- environment should *not* be used again.
 closeEnvironment :: Mode mode => Environment mode -> IO ()
 closeEnvironment (Env mdb_env) = runInBoundThread' $ mdb_env_close mdb_env
+
+-- | Closes an open envrionment as with 'closeEnvironment'. After calling this function, the
+-- environment should *not* be used again.
+-- Does not return until the environment is closed.
+closeEnvironmentBlocking :: Mode mode => Environment mode -> IO ()
+closeEnvironmentBlocking (Env mdb_env) = do
+  mv <- newEmptyMVar
+  runInBoundThread' $ do
+    mdb_env_close mdb_env
+    putMVar mv ()
+  takeMVar mv
 
 -- | Convenience function for opening an LMDB environment in 'ReadWrite'
 -- mode; see 'openEnvironment'
