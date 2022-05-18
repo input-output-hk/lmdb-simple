@@ -15,6 +15,7 @@ module Database.LMDB.Simple.Internal
   , isReadWriteTransaction
   , serialiseBS
   , marshalOut
+  , marshalOutBS
   , marshalIn
   , peekVal
   , forEachForward
