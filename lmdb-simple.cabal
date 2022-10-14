@@ -35,6 +35,8 @@ library
   hs-source-dirs:      src
 
   exposed-modules:     Database.LMDB.Simple
+                       Database.LMDB.Simple.Codec
+                       Database.LMDB.Simple.Cursor
                        Database.LMDB.Simple.DBRef
                        Database.LMDB.Simple.Extra
                        Database.LMDB.Simple.Internal
@@ -43,7 +45,10 @@ library
   build-depends:       async
                      , base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
+                     , cborg
+                     , containers
                      , lmdb >= 0.2 && < 0.3
+                     , mtl
                      , serialise >= 0.2 && < 0.3
                      , unliftio-core
   ghc-options:         -Wall -Wno-name-shadowing -Wno-unused-do-bind
