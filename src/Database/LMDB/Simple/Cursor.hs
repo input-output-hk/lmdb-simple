@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
@@ -10,6 +11,7 @@ module Database.LMDB.Simple.Cursor (
   , runCursorAsTransaction
   , runCursorM
     -- * Monadic operations
+  , MDB_cursor_op (..)
   , cget
   , cget_
   , cpokeKey
@@ -22,6 +24,8 @@ module Database.LMDB.Simple.Cursor (
   , Bound (..)
   , FoldRange (..)
   , forEach
+  , forEachBackward
+  , forEachForward
   , cfoldM
   , cgetMany
   ) where
@@ -33,15 +37,27 @@ import           Foreign                       (Ptr, alloca)
 
 import           Database.LMDB.Raw
 import           Database.LMDB.Simple.Codec
-import           Database.LMDB.Simple.Internal hiding (get, peekVal, put)
+import           Database.LMDB.Simple.Internal hiding (forEachForward,
+                                                forEachReverse, get, peekVal,
+                                                put)
 
 {-------------------------------------------------------------------------------
   The Cursor monad
 -------------------------------------------------------------------------------}
 
 -- | An environment used in the cursor monad @'CursorM'@.
+--
+-- The @'kPtr'@ and @'vPtr'@ pointers are used to communicate keys and values
+-- respectively between the Haskell program and the LMDB software. For example,
+-- if we read the key-value pair at the current cursor position, then reading
+-- what these pointers reference will give us the read key and value. If we
+-- write a key-value pair using the cursor, then the LMDB software will read the
+-- target key and value from the pointers.
 data CursorEnv k v = CursorEnv {
     -- | A pointer to a lower-level cursor provided by the LMDB Haskell binding.
+    --
+    -- An LMDB cursor points to an entry in the database. We can read/write on
+    -- on this cursor, or move the cursor to different entries in the database.
     cursor :: MDB_cursor'
     -- | A pointer that can hold a key.
   , kPtr   :: Ptr MDB_val
@@ -61,6 +77,7 @@ data CursorEnv k v = CursorEnv {
 newtype CursorM k v a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
   deriving stock (Functor)
   deriving newtype (Applicative, Monad)
+  deriving newtype (MonadIO, MonadReader (CursorEnv k v))
 
 -- | Run a cursor monad in @'IO'@.
 runCursorM :: CursorM k v a -> CursorEnv k v -> IO a
@@ -84,15 +101,19 @@ runCursorAsTransaction kcod vcod cm (Db _ dbi) = Txn $ \txn ->
 
 -- | Retrieve a key-value pair using a cursor Get operation.
 --
--- The different typs of cursor Get operations are listed here:
+-- This function will return @'Nothing'@ if what we are trying to read is not
+-- found. For example, @'cget' 'MDB_NEXT'@ will return @'Nothing'@ if there is
+-- no more key-value pair to read after the current cursor position.
+--
+-- The different types of cursor Get operations are listed here:
 -- http://www.lmdb.tech/doc/group__mdb.html#ga1206b2af8b95e7f6b0ef6b28708c9127
 cget :: MDB_cursor_op -> CursorM k v (Maybe (k, v))
-cget op = CursorM $ do
+cget op = do
   r <- ask
-  found <- lift $ mdb_cursor_get' op (cursor r) (kPtr r) (vPtr r)
+  found <- CursorM $ lift $ mdb_cursor_get' op (cursor r) (kPtr r) (vPtr r)
   if found then do
-    k <- lift $ peekVal (kCodec r) (kPtr r)
-    v <- lift $ peekVal (vCodec r) (vPtr r)
+    k <- cpeekKey
+    v <- cpeekValue
     pure $ Just (k, v)
   else
     pure Nothing
@@ -101,10 +122,20 @@ cget op = CursorM $ do
 cget_ :: MDB_cursor_op -> CursorM k v ()
 cget_ = void . cget
 
+cpeekKey :: CursorM k v k
+cpeekKey = do
+  r <- ask
+  CursorM $ lift $ peekMDBVal (kCodec r) (kPtr r)
+
+cpeekValue :: CursorM k v v
+cpeekValue = do
+  r <- ask
+  CursorM $ lift $ peekMDBVal (vCodec r) (vPtr r)
+
 cpokeKey :: k -> CursorM k v ()
 cpokeKey k = CursorM $ do
   s <- ask
-  lift $ pokeVal (kCodec s) (kPtr s) k
+  lift $ pokeMDBVal (kCodec s) (kPtr s) k
 
 cgetFirst :: CursorM k v (Maybe (k, v))
 cgetFirst = cget MDB_FIRST
@@ -127,8 +158,9 @@ cgetSetRange k = cpokeKey k >> cget MDB_SET_RANGE
   Cursor folds
 -------------------------------------------------------------------------------}
 
--- | Left fold over the full database.
+-- | Strict fold over the full database.
 forEach ::
+     forall a k v.
      MDB_cursor_op
   -> MDB_cursor_op
   -> (a -> k -> v -> a)
@@ -137,11 +169,28 @@ forEach ::
 forEach first next f z = do
     go first z
   where
+    go :: MDB_cursor_op -> a -> CursorM k v a
     go op acc = do
       x <- cget op
       case x of
-        Just (k, v) -> go next (f acc k v)
+        Just (k, v) -> let acc' = f acc k v
+                       in  acc' `seq` go next acc'
         Nothing     -> pure acc
+
+-- | Strict left fold over the full database.
+forEachForward ::
+     (a -> k -> v -> a)
+  -> a
+  -> CursorM k v a
+forEachForward  = forEach MDB_FIRST MDB_NEXT
+
+-- | Strict right fold over the full database.
+forEachBackward ::
+     (k -> v -> a -> a)
+  -> a
+  -> CursorM k v a
+forEachBackward f = forEach MDB_LAST MDB_PREV f'
+  where f' z k v = f k v z
 
 data Bound = Exclusive | Inclusive
 
@@ -158,9 +207,12 @@ data FoldRange k v = FoldRange {
 -- The fold starts from the first key in the database if @lbMay == Nothing@. If
 -- @lbMay == Just (k, b)@, then the fold starts from the first key greater than
 -- or equal to @k@, though @b@ determines whether @k@ can be present in the
--- result or not.
+-- result or not. Namely, if @b == Exclusive@, then @k@ can not be present in
+-- the result because @k@ is the exclusive lower bound for this range read.
+-- Conversely, if @b == Inclusive@, then @k@ /may/ be present in the result, but
+-- it does not have to be if @k@ is not in the database.
 --
--- Note: This is a left fold.
+-- Note: This is a strict left fold.
 cfoldM ::
      forall b k v. Ord k
   => (b -> k -> v -> CursorM k v b)
@@ -175,8 +227,9 @@ cfoldM f z FoldRange{lowerBound = lb, keysToFold = n}
           Nothing ->
             pure z
           Just (k, v) -> do
-            z' <- f z k v
-            foldM f' z' [1..n-1]
+            !z'  <- f z k v
+            !z'' <- foldM f' z' [1..n-1]
+            pure z''
   where
     cgetInitial :: CursorM k v (Maybe (k, v))
     cgetInitial = maybe cgetFirst (uncurry cgetSetRange') lb
@@ -184,16 +237,17 @@ cfoldM f z FoldRange{lowerBound = lb, keysToFold = n}
     -- Like @'cgetSetRange'@, but may skip the first read key if the the lower
     -- bound is exclusive and @k@ is the first key that was read from the
     -- database.
+    cgetSetRange' :: k -> Bound -> CursorM k v (Maybe (k, v))
     cgetSetRange' k b = do
-      k'vMay <- cgetSetRange k
-      case k'vMay of
+      k2vMay <- cgetSetRange k
+      case k2vMay of
         Nothing                       -> pure Nothing
-        Just (k', v) | k == k'
+        Just (k2, v) | k == k2
                      , Exclusive <- b -> cgetNext
-                     | otherwise      -> pure $ Just (k', v)
+                     | otherwise      -> pure $ Just (k2, v)
 
     f' :: b -> Int -> CursorM k v b
-    f' acc _ = do
+    f' !acc _ = do
       kvMay <- cgetNext
       case kvMay of
         Nothing     -> pure acc

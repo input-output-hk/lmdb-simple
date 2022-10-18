@@ -14,8 +14,8 @@ module Database.LMDB.Simple.Codec (
   , marshalOutBS
   , serialiseLBS
   , serialiseBS
-  , peekVal
-  , pokeVal
+  , peekMDBVal
+  , pokeMDBVal
   ) where
 
 import           Control.Exception             (throw)
@@ -100,8 +100,8 @@ serialiseLBS = serialise
 serialiseBS :: Codec v -> v -> BS.ByteString
 serialiseBS codec = LBS.toStrict . serialiseLBS codec
 
-peekVal :: Codec v -> Ptr MDB_val -> IO v
-peekVal codec = peek >=> marshalIn codec
+peekMDBVal :: Codec v -> Ptr MDB_val -> IO v
+peekMDBVal codec = peek >=> marshalIn codec
 
-pokeVal :: Codec v -> Ptr MDB_val -> v -> IO ()
-pokeVal codec ptr v = marshalOut codec v (poke ptr)
+pokeMDBVal :: Codec v -> Ptr MDB_val -> v -> IO ()
+pokeMDBVal codec ptr v = marshalOut codec v (poke ptr)
