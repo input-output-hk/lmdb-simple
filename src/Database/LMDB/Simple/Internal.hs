@@ -30,6 +30,7 @@ module Database.LMDB.Simple.Internal
   , getBS'
   , put
   , putBS
+  , putNoOverwrite
   , delete
   , deleteBS
   ) where
@@ -81,12 +82,13 @@ import Database.LMDB.Raw
   , MDB_val (MDB_val)
   , MDB_cursor'
   , MDB_cursor_op (MDB_FIRST, MDB_LAST, MDB_NEXT, MDB_PREV)
-  , MDB_WriteFlag (MDB_CURRENT)
+  , MDB_WriteFlag (MDB_CURRENT, MDB_NOOVERWRITE)
   , MDB_WriteFlags
   , mdb_cursor_open'
   , mdb_cursor_close'
   , mdb_cursor_get'
   , mdb_get'
+  , mdb_put'
   , mdb_reserve'
   , mdb_del'
   , compileWriteFlags
@@ -268,3 +270,10 @@ delete db = deleteBS db . serialiseBS
 deleteBS :: Database k v -> BS.ByteString -> Transaction ReadWrite Bool
 deleteBS (Db _ dbi) key = Txn $ \txn ->
   marshalOutBS key $ \kval -> mdb_del' txn dbi kval Nothing
+
+putNoOverwrite :: (Serialise k, Serialise v)
+               => Database k v -> k -> v -> Transaction ReadWrite Bool
+putNoOverwrite (Db _ dbi) k v = Txn $ \txn ->
+  marshalOut k $ \kval ->
+    marshalOut v $ \vval ->
+      mdb_put' (compileWriteFlags [MDB_NOOVERWRITE]) txn dbi kval vval
