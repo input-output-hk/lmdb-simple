@@ -72,7 +72,7 @@ test-suite test-cursors
                      , mtl
                      , QuickCheck
                      , quickcheck-dynamic
-                     , quickcheck-lockstep
+                     , quickcheck-lockstep >= 0.2
                      , serialise
                      , tasty
                      , tasty-hunit

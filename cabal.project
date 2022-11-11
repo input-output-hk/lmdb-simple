@@ -5,8 +5,3 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/haskell-lmdb
   tag: fe5d3e54a3b3a683c8ec8712abb160561a676b4a
-
-source-repository-package
-  type: git
-  location: https://github.com/well-typed/quickcheck-lockstep
-  tag: 4f7a59988561691e79d592f2417d244539f607fc
