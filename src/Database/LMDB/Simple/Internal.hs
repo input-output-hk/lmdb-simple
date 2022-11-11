@@ -18,6 +18,7 @@ module Database.LMDB.Simple.Internal
   , marshalOutBS
   , marshalIn
   , peekVal
+  , pokeMDBVal
   , forEachForward
   , forEachReverse
   , withCursor
@@ -95,6 +96,7 @@ import Foreign
   ( Ptr
   , castPtr
   , peek
+  , poke
   , plusPtr
   , copyBytes
   )
@@ -169,8 +171,15 @@ instance MonadIO (Transaction mode) where
 -- "Codec.Serialise.Tutorial".
 data Database k v = Db MDB_env MDB_dbi'
 
+-- | FIXME(jdral): this function should be renamed to @peekMDBVal@ to avoid
+-- confusion with the concepts of keys and values that are stored as key-value
+-- pairs in an LMDB database, since both keys and values are both represnted as
+-- @'MDB_val'@s in the lower-level Haskell LMDB bindings.
 peekVal :: Serialise v => Ptr MDB_val -> IO v
 peekVal = peek >=> marshalIn
+
+pokeMDBVal :: Serialise v => Ptr MDB_val -> v -> IO ()
+pokeMDBVal ptr v = marshalOut v (poke ptr)
 
 serialiseLBS :: Serialise v => v -> BSL.ByteString
 serialiseLBS = serialise
