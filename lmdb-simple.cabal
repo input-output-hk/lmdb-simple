@@ -56,6 +56,31 @@ library
   other-extensions:    ConstraintKinds
                        TypeFamilies
 
+test-suite test-cursors
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test-cursors
+  main-is:             Main.hs
+  other-modules:       Test.Database.LMDB.Simple.Cursor
+                       Test.Database.LMDB.Simple.Cursor.Lockstep
+                       Test.Database.LMDB.Simple.Cursor.Lockstep.Mock
+  build-depends:       base
+                     , containers
+                     , directory
+                     , exceptions
+                     , lmdb
+                     , lmdb-simple
+                     , mtl
+                     , QuickCheck
+                     , quickcheck-dynamic
+                     , quickcheck-lockstep
+                     , serialise
+                     , tasty
+                     , tasty-hunit
+                     , tasty-quickcheck
+                     , temporary
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
 test-suite sample
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
