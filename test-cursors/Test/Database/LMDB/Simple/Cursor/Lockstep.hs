@@ -132,7 +132,6 @@ type RealMonad k v = CursorM k v
 type instance Realized (CursorM k v) a = a
 
 type CursorAct k v a = Action (Lockstep (CursorState k v)) (Either Err a)
--- type CursorVar k v a = ModelVar (CursorState k v) a
 
 instance ( Show k, Show v
          , Ord k, Eq v

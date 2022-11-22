@@ -103,7 +103,7 @@ newtype MC k v a = MC {unMC :: ExceptT Err (StateT (Mock k v) Identity) a}
   deriving newtype (Applicative, Monad, MonadState (Mock k v), MonadError Err)
 
 runMC :: MC k v a -> Mock k v -> (Either Err a, Mock k v)
-runMC mc m = runIdentity (runStateT (runExceptT (unMC mc)) m)
+runMC = runState . runExceptT . unMC
 
 -- | Unsafely evaluate a mocked cursor monad.
 --

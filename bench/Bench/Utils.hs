@@ -4,7 +4,6 @@
 {-# LANGUAGE InstanceSigs               #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
 
 module Bench.Utils (
     -- * Environment types
@@ -33,6 +32,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.ByteString.Short         as B (ShortByteString, pack)
 import           Data.Proxy
+import           Data.Word
 import           GHC.Generics                  (Generic)
 import           System.Directory
 import           System.IO.Temp
@@ -52,11 +52,14 @@ data BenchEnv k v = BenchEnv {
   , db         :: Database k v
   }
 
--- TODO: is this instance sufficient? I think so, since a @'BenchEnv'@ mainly
--- consists of pointers.
+-- TODO: The @'dbEnv'@ and @'db'@ fields of @'BenchEnv'@ consist mainly of
+-- pointers, so we can omit them here because they will be likely not to
+-- contribute much to evaluation time. If we want to evaluate these fields
+-- instead, we should change the lower-level Haskell bindings to expose more
+-- constructors.
 instance NFData (BenchEnv k v) where
   rnf :: BenchEnv k v -> ()
-  rnf _ = ()
+  rnf BenchEnv{dbFilePath} = rnf dbFilePath
 
 {-------------------------------------------------------------------------------
   Initialisation and cleanup for environments
@@ -116,6 +119,10 @@ noPopulateDb _ = pure ()
 -- generated key is already present in the database (i.e., a /clash/)" strategy
 -- to generate exactly @n@ unique keys, which means that clashes occur
 -- inhibitively often as @n@ approaches the size of the of the range of @k@.
+--
+-- TODO: As a possible improvement to ensure termination, the function could
+-- keep track of the smallest key that is not yet in the DB, such that we can
+-- use that key if a clash occurs. This w
 populateDbUnique ::
      ( Serialise k, Serialise v
      , Arbitrary k, Arbitrary v
@@ -125,8 +132,8 @@ populateDbUnique ::
   -> Database k v
   -> Transaction ReadWrite ()
 populateDbUnique n db
-  | n <= 0    = pure ()
-  | otherwise = do
+  | n <= 0           = pure ()
+  | otherwise        = do
       k <- liftIO $ generate arbitrary
       v <- liftIO $ generate arbitrary
       b <- Internal.putNoOverwrite db k v
@@ -161,13 +168,21 @@ valueSize = 64
 -- | A value of type @'Key'@ is chosen uniformly from the entire range of the
 -- type @'Key'@: any possible @'Word8'@ vector of length @'keySize'@.
 instance Arbitrary Key where
-  arbitrary = Key . B.pack <$> replicateM keySize arbitraryBoundedIntegral
-
+  arbitrary = Key . B.pack <$> replicateM keySize uniformWord8
 
 -- | A value of type @'Value'@ is chosen uniformly from the entire range of the
 -- type @'Value'@: any possible @'Word8'@ vector of length @'valueSize'@.
 instance Arbitrary Value where
-  arbitrary = Value . B.pack <$> replicateM valueSize arbitraryBoundedIntegral
+  arbitrary = Value . B.pack <$> replicateM valueSize uniformWord8
+
+-- | Generate a uniformly random @'Word8'@.
+--
+-- @'arbitraryBoundedIntegral'@ ensures that we pick uniformly random @'Word8'@
+-- values. The @'arbitrary'@ instance for @'Word8'@ uses
+-- @'arbitrarySizedBoundedIntegral'@, which also picks from the entire range of
+-- the @'Word8'@ type, but smaller values are more likely to picked.
+uniformWord8 :: Gen Word8
+uniformWord8 = arbitraryBoundedIntegral
 
 pKey :: Proxy Key
 pKey = Proxy

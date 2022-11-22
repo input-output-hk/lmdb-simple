@@ -352,7 +352,7 @@ compileCDelFlag = compileWriteFlags . toList . fmap fromCDelFlag
 
 -- General-purpose cursor delete function.
 --
--- Note: nota all flags are supported, so use dedicated functions like @'cdel''@
+-- Note: not all flags are supported, so use dedicated functions like @'cdel''@
 -- instead.
 --
 -- http://www.lmdb.tech/doc/group__mdb.html#ga26a52d3efcfd72e5bf6bd6960bf75f95
