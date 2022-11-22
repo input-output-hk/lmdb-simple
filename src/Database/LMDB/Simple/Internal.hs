@@ -18,6 +18,7 @@ module Database.LMDB.Simple.Internal
   , marshalOutBS
   , marshalIn
   , peekVal
+  , pokeMDBVal
   , forEachForward
   , forEachReverse
   , withCursor
@@ -29,6 +30,7 @@ module Database.LMDB.Simple.Internal
   , getBS'
   , put
   , putBS
+  , putNoOverwrite
   , delete
   , deleteBS
   ) where
@@ -80,12 +82,13 @@ import Database.LMDB.Raw
   , MDB_val (MDB_val)
   , MDB_cursor'
   , MDB_cursor_op (MDB_FIRST, MDB_LAST, MDB_NEXT, MDB_PREV)
-  , MDB_WriteFlag (MDB_CURRENT)
+  , MDB_WriteFlag (MDB_CURRENT, MDB_NOOVERWRITE)
   , MDB_WriteFlags
   , mdb_cursor_open'
   , mdb_cursor_close'
   , mdb_cursor_get'
   , mdb_get'
+  , mdb_put'
   , mdb_reserve'
   , mdb_del'
   , compileWriteFlags
@@ -95,6 +98,7 @@ import Foreign
   ( Ptr
   , castPtr
   , peek
+  , poke
   , plusPtr
   , copyBytes
   )
@@ -169,8 +173,27 @@ instance MonadIO (Transaction mode) where
 -- "Codec.Serialise.Tutorial".
 data Database k v = Db MDB_env MDB_dbi'
 
+-- | @'peekVal' ptr@ peeks a value of type @v@ from a pointer @ptr@.
+--
+-- Use this function in conjunction with @'pokeMDBVal'@ to communicate with LMDB
+-- through pointers. This function will marshal in the value of type @v@ that we
+-- peek from the pointer.
+--
+-- TODO: this function should be renamed to @peekMDBVal@ to avoid confusion with
+-- the concepts of keys and values that are stored as key-value pairs in an LMDB
+-- database, since both keys and values are both represented as @'MDB_val'@s in
+-- the lower-level Haskell LMDB bindings.
 peekVal :: Serialise v => Ptr MDB_val -> IO v
 peekVal = peek >=> marshalIn
+
+-- | @'pokeMDBVal' ptr x@ communicates a value @x@ of type @v@ to LMDB through a
+-- pointer @ptr@.
+--
+-- Use this function in conjunction with @'peekVal'@ to communicate with LMDB
+-- through pointers. This function will marshal out the value @x@ that we want
+-- to poke the pointer with.
+pokeMDBVal :: Serialise v => Ptr MDB_val -> v -> IO ()
+pokeMDBVal ptr v = marshalOut v (poke ptr)
 
 serialiseLBS :: Serialise v => v -> BSL.ByteString
 serialiseLBS = serialise
@@ -259,3 +282,10 @@ delete db = deleteBS db . serialiseBS
 deleteBS :: Database k v -> BS.ByteString -> Transaction ReadWrite Bool
 deleteBS (Db _ dbi) key = Txn $ \txn ->
   marshalOutBS key $ \kval -> mdb_del' txn dbi kval Nothing
+
+putNoOverwrite :: (Serialise k, Serialise v)
+               => Database k v -> k -> v -> Transaction ReadWrite Bool
+putNoOverwrite (Db _ dbi) k v = Txn $ \txn ->
+  marshalOut k $ \kval ->
+    marshalOut v $ \vval ->
+      mdb_put' (compileWriteFlags [MDB_NOOVERWRITE]) txn dbi kval vval

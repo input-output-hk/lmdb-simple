@@ -35,6 +35,7 @@ library
   hs-source-dirs:      src
 
   exposed-modules:     Database.LMDB.Simple
+                       Database.LMDB.Simple.Cursor
                        Database.LMDB.Simple.DBRef
                        Database.LMDB.Simple.Extra
                        Database.LMDB.Simple.Internal
@@ -43,7 +44,10 @@ library
   build-depends:       async
                      , base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
+                     , containers
+                     , exceptions
                      , lmdb >= 0.2 && < 0.3
+                     , mtl
                      , serialise >= 0.2 && < 0.3
                      , unliftio-core
   ghc-options:         -Wall -Wno-name-shadowing -Wno-unused-do-bind
@@ -51,6 +55,55 @@ library
   default-extensions:  Trustworthy
   other-extensions:    ConstraintKinds
                        TypeFamilies
+
+test-suite test-cursors
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test-cursors
+  main-is:             Main.hs
+  other-modules:       Test.Database.LMDB.Simple.Cursor
+                       Test.Database.LMDB.Simple.Cursor.Lockstep
+                       Test.Database.LMDB.Simple.Cursor.Lockstep.Mock
+  build-depends:       base
+                     , containers
+                     , directory
+                     , exceptions
+                     , lmdb
+                     , lmdb-simple
+                     , mtl
+                     , QuickCheck
+                     , quickcheck-dynamic
+                     , quickcheck-lockstep
+                     , serialise
+                     , tasty
+                     , tasty-hunit
+                     , tasty-quickcheck
+                     , temporary
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+                       -Werror
+  default-language:    Haskell2010
+
+benchmark bench
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      bench
+  main-is:             Main.hs
+  other-modules:       Bench.Database.LMDB.Simple.Cursor
+                       Bench.Utils
+  build-depends:       base
+                     , bytestring
+                     , containers
+                     , deepseq
+                     , directory
+                     , lmdb-simple
+                     , QuickCheck
+                     , random
+                     , serialise
+                     , tasty
+                     , tasty-bench
+                     , tasty-quickcheck
+                     , temporary
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+                       -with-rtsopts=-A32m -Werror
+  default-language:    Haskell2010
 
 test-suite sample
   type:                exitcode-stdio-1.0
