@@ -16,6 +16,7 @@ module Database.LMDB.Simple.Internal
   , serialiseBS
   , marshalOut
   , marshalOutBS
+  , copyLazyBS
   , marshalIn
   , peekVal
   , pokeMDBVal

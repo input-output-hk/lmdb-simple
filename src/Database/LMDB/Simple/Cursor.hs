@@ -12,7 +12,9 @@ module Database.LMDB.Simple.Cursor (
     CursorConstraints
   , CursorEnv (..)
   , CursorM (..)
+  , PeekPoke (..)
   , runCursorAsTransaction
+  , runCursorAsTransaction'
   , runCursorM
     -- * Peek and poke keys and values
   , cpeekKey
@@ -89,6 +91,22 @@ data CursorEnv k v = CursorEnv {
   , kPtr   :: Ptr MDB_val
     -- | A pointer that can hold a value.
   , vPtr   :: Ptr MDB_val
+    -- | Record of functions for peeking/poking pointers to keys and values.
+  , pp     :: PeekPoke k v
+  }
+
+-- | Record of functions for peeking/poking pointers to keys and values.
+--
+-- Why do we abstract over these functions? @'Serialise'@ constraints may be too
+-- strict for certain use cases. This record is only small abstraction that
+-- enables running the @'CursorM'@ both with or without @'Serialise' k@ and
+-- @'Serialise' v@ instances. See @'runCursorTransaction'@ and
+-- @'runCursorTransaction''@.
+data PeekPoke k v = PeekPoke {
+    kPeek :: Ptr MDB_val -> IO k
+  , vPeek :: Ptr MDB_val -> IO v
+  , kPoke :: Ptr MDB_val -> k -> IO ()
+  , vPoke :: Ptr MDB_val -> v -> IO ()
   }
 
 -- | The cursor monad is a @'ReaderT'@ transformer on top of @'IO'@.
@@ -105,22 +123,45 @@ newtype CursorM k v a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
 runCursorM :: CursorM k v a -> CursorEnv k v -> IO a
 runCursorM cm = runReaderT (unCursorM cm)
 
--- | Run a cursor monad as a @'Transaction'.
+-- | Default runner for running a cursor monad as a @'Transaction'@.
+--
+-- Uses implicit @'Serialise'@ constraints to fill in the @'PeekPoke'@ record
+-- that is used to peek/poke pointers to keys and values.
 runCursorAsTransaction ::
      (Serialise k, Serialise v)
   => CursorM k v a      -- ^ The cursor monad to run.
   -> Database k v       -- ^ The database to run the cursor monad in.
   -> Transaction mode a
 runCursorAsTransaction cm (Db _ dbi) = Txn $ \txn ->
+    alloca $ \kptr ->
+      alloca $ \vptr ->
+        withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr pp))
+  where
+    pp = PeekPoke {
+        kPeek = peekVal
+      , vPeek = peekVal
+      , kPoke = pokeMDBVal
+      , vPoke = pokeMDBVal
+      }
+
+-- | Alternative runner for running a cursor monad as a @'Transaction'@.
+--
+-- This runner requires an explicit @'PeekPoke'@ record that is used to
+-- peek/poke pointers to keys and values.
+runCursorAsTransaction' ::
+     CursorM k v a      -- ^ The cursor monad to run.
+  -> Database k v       -- ^ The database to run the cursor monad in.
+  -> PeekPoke k v       -- ^ Peek and poke functions for values of type @k@
+                        --   and @v@.
+  -> Transaction mode a
+runCursorAsTransaction' cm (Db _ dbi) pp = Txn $ \txn ->
   alloca $ \kptr ->
     alloca $ \vptr ->
-      withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr))
+      withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr pp))
 
 type CursorConstraints m k v = (
     MonadIO m
   , MonadReader (CursorEnv k v) m
-  , Serialise k
-  , Serialise v
   )
 
 {-------------------------------------------------------------------------------
@@ -130,26 +171,30 @@ type CursorConstraints m k v = (
 -- | Read the key at the key pointer.
 cpeekKey :: CursorConstraints m k v => m k
 cpeekKey = do
-  r <- ask
-  liftIO $ peekVal (kPtr r)
+  kPeek <- asks (kPeek . pp)
+  kPtr <- asks kPtr
+  liftIO $ kPeek kPtr
 
 -- | Read the value at the value pointer.
 cpeekValue :: CursorConstraints m k v => m v
 cpeekValue = do
-  r <- ask
-  liftIO $ peekVal (vPtr r)
+  vPeek <- asks (vPeek . pp)
+  vPtr <- asks vPtr
+  liftIO $ vPeek vPtr
 
 -- | Write a key at the key pointer.
 cpokeKey :: CursorConstraints m k v => k -> m ()
 cpokeKey k = do
-  s <- ask
-  liftIO $ pokeMDBVal (kPtr s) k
+  kPoke <- asks (kPoke . pp)
+  kPtr <- asks kPtr
+  liftIO $ kPoke kPtr k
 
 -- | Write a value at the value pointer.
 cpokeValue :: CursorConstraints m k v => v -> m ()
 cpokeValue v = do
-  s <- ask
-  liftIO $ pokeMDBVal (vPtr s) v
+  vPoke <- asks (vPoke . pp)
+  vPtr <- asks vPtr
+  liftIO $ vPoke vPtr v
 
 {-------------------------------------------------------------------------------
   Basic monadic cursor operations: get
