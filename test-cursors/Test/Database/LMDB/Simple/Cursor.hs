@@ -1,4 +1,3 @@
-
 module Test.Database.LMDB.Simple.Cursor  where
 
 import           Test.Tasty

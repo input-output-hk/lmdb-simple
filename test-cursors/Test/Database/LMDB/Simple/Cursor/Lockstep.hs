@@ -128,8 +128,8 @@ initState = CursorState {
   @'StateModel'@ and @'RunModel'@ instances
 -------------------------------------------------------------------------------}
 
-type RealMonad k v = CursorM k v
-type instance Realized (CursorM k v) a = a
+type RealMonad k v mode = CursorM k v mode
+type instance Realized (CursorM k v mode) a = a
 
 type CursorAct k v a = Action (Lockstep (CursorState k v)) (Either Err a)
 
@@ -158,10 +158,10 @@ instance ( Show k, Show v
          , Typeable k, Typeable v
          , Arbitrary k, Arbitrary v
          , Serialise k, Serialise v
-         ) => RunModel (Lockstep (CursorState k v)) (RealMonad k v) where
+         ) => RunModel (Lockstep (CursorState k v)) (RealMonad k v ReadWrite) where
   perform _st    = runCM
   postcondition = Lockstep.postcondition
-  monitoring    = Lockstep.monitoring (Proxy @(CursorM k v))
+  monitoring    = Lockstep.monitoring (Proxy @(CursorM k v ReadWrite))
 
 deriving stock instance (Show k, Show v)
                      => Show (LockstepAction (CursorState k v) a)
@@ -279,11 +279,11 @@ deriving stock instance (Eq k, Eq v) => Eq (CursorObs k v a)
 
 instance (Show k, Show v, Eq k, Eq v, Ord k, Typeable k, Typeable v
          , Arbitrary k, Arbitrary v, Serialise k, Serialise v)
-      => RunLockstep (CursorState k v) (RealMonad k v) where
+      => RunLockstep (CursorState k v) (RealMonad k v ReadWrite) where
   observeReal ::
-       Proxy (RealMonad k v)
+       Proxy (RealMonad k v ReadWrite)
     -> LockstepAction (CursorState k v) a
-    -> Realized (RealMonad k v) a
+    -> Realized (RealMonad k v ReadWrite) a
     -> Observable (CursorState k v) a
   observeReal _proxy = \case
       CursorGet{}         -> OEither . bimap OId OId
@@ -456,8 +456,8 @@ instance InterpretOp Op (ModelValue (CursorState k v)) where
 runCM ::
      (Serialise k, Serialise v)
   => LockstepAction (CursorState k v) a
-  -> LookUp (RealMonad k v)
-  -> RealMonad k v (Realized (RealMonad k v) a)
+  -> LookUp (RealMonad k v mode)
+  -> RealMonad k v ReadWrite (Realized (RealMonad k v mode) a)
 runCM act _lookUp = case act of
   CursorGet op        -> catchErr $ cgetG op
   CursorGetSet k      -> catchErr $ cgetSet k
@@ -466,10 +466,10 @@ runCM act _lookUp = case act of
   CursorPut fls k v   -> catchErr $ cputG fls k v
   CursorDel fls       -> catchErr $ cdelG fls
 
-catchErr :: RealMonad k v a -> RealMonad k v (Either Err a)
+catchErr :: RealMonad k v mode a -> RealMonad k v mode (Either Err a)
 catchErr act = catch (Right <$> act) handler
   where
-    handler :: LMDB_Error -> RealMonad k v (Either Err a)
+    handler :: LMDB_Error -> RealMonad k v mode (Either Err a)
     handler e = maybe (throwM e) (return . Left) (fromLMDBError e)
 
 {-------------------------------------------------------------------------------
