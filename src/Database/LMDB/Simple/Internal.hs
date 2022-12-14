@@ -4,7 +4,7 @@
 module Database.LMDB.Simple.Internal
   ( ReadWrite
   , ReadOnly
-  , Mode
+  , Mode (..)
   , SubMode
   , Environment (..)
   , Transaction (..)
