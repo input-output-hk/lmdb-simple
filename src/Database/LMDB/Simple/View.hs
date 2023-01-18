@@ -81,7 +81,7 @@ import Database.LMDB.Simple.Internal
   , forEachReverse
   , marshalOut
   , marshalIn
-  , peekVal
+  , peekMDBVal
   )
 
 import Data.Maybe
@@ -171,7 +171,7 @@ foldr :: Serialise v => (v -> b -> b) -> b -> View k v -> b
 foldr f z view = viewIO view $ \(txn, dbi) ->
   alloca $ \vptr ->
   forEachForward txn dbi nullPtr vptr z $ \rest ->
-  f <$> peekVal vptr <*> rest
+  f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the view using the given right-associative
 -- binary operator, such that @'foldrWithKey' f z == 'Prelude.foldr'
@@ -182,7 +182,7 @@ foldrWithKey f z view = viewIO view $ \(txn, dbi) ->
   alloca $ \kptr ->
   alloca $ \vptr ->
   forEachForward txn dbi kptr vptr z $ \rest ->
-  f <$> peekVal kptr <*> peekVal vptr <*> rest
+  f <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the values in the view using the given left-associative binary
 -- operator, such that @'foldl' f z == 'Prelude.foldl' f z . 'elems'@.
@@ -190,7 +190,7 @@ foldl :: Serialise v => (a -> v -> a) -> a -> View k v -> a
 foldl f z view = viewIO view $ \(txn, dbi) ->
   alloca $ \vptr ->
   forEachReverse txn dbi nullPtr vptr z $ \rest ->
-  flip f <$> peekVal vptr <*> rest
+  flip f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the view using the given left-associative
 -- binary operator, such that @'foldlWithKey' f z == 'Prelude.foldl' (\\z'
@@ -201,7 +201,7 @@ foldlWithKey f z view = viewIO view $ \(txn, dbi) ->
   alloca $ \kptr ->
   alloca $ \vptr ->
   forEachReverse txn dbi kptr vptr z $ \rest ->
-  (\k v a -> f a k v) <$> peekVal kptr <*> peekVal vptr <*> rest
+  (\k v a -> f a k v) <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the view using the given monoid.
 foldViewWithKey :: (Monoid m, Serialise k, Serialise v)
@@ -218,7 +218,7 @@ keys :: Serialise k => View k v -> [k]
 keys view = viewIO view $ \(txn, dbi) ->
   alloca $ \kptr ->
   forEachForward txn dbi kptr nullPtr [] $ \rest ->
-  (:) <$> peekVal kptr <*> rest
+  (:) <$> peekMDBVal kptr <*> rest
 
 -- | Convert the view to a list of key/value pairs.
 toList :: (Serialise k, Serialise v) => View k v -> [(k, v)]

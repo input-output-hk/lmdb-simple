@@ -18,7 +18,7 @@ module Database.LMDB.Simple.Internal
   , marshalOutBS
   , copyLazyBS
   , marshalIn
-  , peekVal
+  , peekMDBVal
   , pokeMDBVal
   , forEachForward
   , forEachReverse
@@ -174,23 +174,18 @@ instance MonadIO (Transaction mode) where
 -- "Codec.Serialise.Tutorial".
 data Database k v = Db MDB_env MDB_dbi'
 
--- | @'peekVal' ptr@ peeks a value of type @v@ from a pointer @ptr@.
+-- | @'peekMDBVal' ptr@ peeks a value of type @v@ from a pointer @ptr@.
 --
 -- Use this function in conjunction with @'pokeMDBVal'@ to communicate with LMDB
 -- through pointers. This function will marshal in the value of type @v@ that we
 -- peek from the pointer.
---
--- TODO: this function should be renamed to @peekMDBVal@ to avoid confusion with
--- the concepts of keys and values that are stored as key-value pairs in an LMDB
--- database, since both keys and values are both represented as @'MDB_val'@s in
--- the lower-level Haskell LMDB bindings.
-peekVal :: Serialise v => Ptr MDB_val -> IO v
-peekVal = peek >=> marshalIn
+peekMDBVal :: Serialise v => Ptr MDB_val -> IO v
+peekMDBVal = peek >=> marshalIn
 
 -- | @'pokeMDBVal' ptr x@ communicates a value @x@ of type @v@ to LMDB through a
 -- pointer @ptr@.
 --
--- Use this function in conjunction with @'peekVal'@ to communicate with LMDB
+-- Use this function in conjunction with @'peekMDBVal'@ to communicate with LMDB
 -- through pointers. This function will marshal out the value @x@ that we want
 -- to poke the pointer with.
 pokeMDBVal :: Serialise v => Ptr MDB_val -> v -> IO ()

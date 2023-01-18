@@ -77,7 +77,7 @@ import Database.LMDB.Simple.Internal
   , forEachForward
   , forEachReverse
   , marshalOut
-  , peekVal
+  , peekMDBVal
   , withCursor
   , defaultWriteFlags
   , overwriteFlags
@@ -160,7 +160,7 @@ insertLookupWithKey f key value (Db _ dbi) = Txn $ \txn ->
   with kval $ \kptr -> alloca $ \vptr -> do
     found <- mdb_cursor_get' MDB_SET cursor kptr vptr
     if found
-      then do oldValue <- peekVal vptr
+      then do oldValue <- peekMDBVal vptr
               cursorPut cursor overwriteFlags kval (f key value oldValue)
               return (Just oldValue)
       else do cursorPut cursor defaultWriteFlags kval value
@@ -180,7 +180,7 @@ keys :: Serialise k => Database k v -> Transaction mode [k]
 keys (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
   forEachForward txn dbi kptr nullPtr [] $ \rest ->
-  (:) <$> peekVal kptr <*> rest
+  (:) <$> peekMDBVal kptr <*> rest
 
 -- | Convert the database to a list of key/value pairs. Note that this will
 -- make a copy of the entire database in memory.
@@ -193,7 +193,7 @@ foldr :: Serialise v => (v -> b -> b) -> b -> Database k v -> Transaction mode b
 foldr f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \vptr ->
   forEachForward txn dbi nullPtr vptr z $ \rest ->
-  f <$> peekVal vptr <*> rest
+  f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given
 -- right-associative binary operator.
@@ -203,7 +203,7 @@ foldrWithKey f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
   alloca $ \vptr ->
   forEachForward txn dbi kptr vptr z $ \rest ->
-  f <$> peekVal kptr <*> peekVal vptr <*> rest
+  f <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the values in the database using the given left-associative binary
 -- operator.
@@ -211,7 +211,7 @@ foldl :: Serialise v => (a -> v -> a) -> a -> Database k v -> Transaction mode a
 foldl f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \vptr ->
   forEachReverse txn dbi nullPtr vptr z $ \rest ->
-  flip f <$> peekVal vptr <*> rest
+  flip f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given left-associative
 -- binary operator.
@@ -221,7 +221,7 @@ foldlWithKey f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
   alloca $ \vptr ->
   forEachReverse txn dbi kptr vptr z $ \rest ->
-  (\k v a -> f a k v) <$> peekVal kptr <*> peekVal vptr <*> rest
+  (\k v a -> f a k v) <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given monoid.
 foldDatabaseWithKey :: (Monoid m, Serialise k, Serialise v)
@@ -284,7 +284,7 @@ alterWithKey f key (Db _ dbi) = Txn $ \txn ->
   with kval $ \kptr -> alloca $ \vptr -> do
     found <- mdb_cursor_get' MDB_SET cursor kptr vptr
     if found
-      then peekVal vptr >>= \oldValue -> do
+      then peekMDBVal vptr >>= \oldValue -> do
         let old = Just oldValue
         case f key old of
           new@(Just newValue) -> marshalOut newValue $ \vval ->
