@@ -138,8 +138,8 @@ runCursorAsTransaction cm (Db _ dbi) = Txn $ \txn ->
         withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr pp))
   where
     pp = PeekPoke {
-        kPeek = peekVal
-      , vPeek = peekVal
+        kPeek = peekMDBVal
+      , vPeek = peekMDBVal
       , kPoke = pokeMDBVal
       , vPoke = pokeMDBVal
       }
