@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.4"]
-        cabal: ["3.6.2.0"]
+        ghc: ["8.10.7", "9.2.5"]
+        cabal: ["3.8.1.0"]
         os: [ubuntu-latest] # TODO: add Windows CI
 
     runs-on: ${{ matrix.os }}
@@ -51,7 +51,6 @@ jobs:
     - name: Install Cabal dependencies
       run: |
         cabal update
-        cabal install --overwrite-policy=always hspec-discover
         cabal build --only-dependencies --enable-tests --enable-benchmarks
 
     - name: Build

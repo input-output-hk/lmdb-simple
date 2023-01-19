@@ -1,4 +1,4 @@
-
+{-# LANGUAGE LambdaCase   #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Database.LMDB.Simple.Internal
@@ -211,7 +211,9 @@ marshalOutBS bs f =
 
 copyLazyBS :: BSL.ByteString -> Ptr Word8 -> Int -> IO ()
 copyLazyBS lbs ptr rem =
-  foldM copyBS (ptr, rem) (toChunks lbs) >>= \(_, 0) -> return ()
+  foldM copyBS (ptr, rem) (toChunks lbs) >>= \case
+      (_, 0) -> return ()
+      (_, i) -> error ("Incomplete lazy bytestring copying, remaining bytes: " ++ show i)
 
   where copyBS :: (Ptr Word8, Int) -> BS.ByteString -> IO (Ptr Word8, Int)
         copyBS (ptr, rem) bs = unsafeUseAsCStringLen bs $ \(bsp, len) ->
