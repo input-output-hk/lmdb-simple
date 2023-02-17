@@ -1,6 +1,6 @@
 cabal-version:       3.0
-name:                lmdb-simple
-version:             0.4.0.0
+name:                cardano-lmdb-simple
+version:             0.5.0.0
 synopsis:            Simple API for LMDB
 description:         This package provides a simple API for using the
                      Lightning Memory-mapped Database (LMDB).
@@ -39,7 +39,7 @@ library
                      , bytestring >= 0.10 && < 0.12
                      , containers
                      , exceptions
-                     , lmdb >= 0.2 && < 0.3
+                     , cardano-lmdb >= 0.3.0.0
                      , mtl
                      , serialise >= 0.2 && < 0.3
                      , unliftio-core
@@ -57,11 +57,11 @@ test-suite test-cursors
                        Test.Database.LMDB.Simple.Cursor.Lockstep
                        Test.Database.LMDB.Simple.Cursor.Lockstep.Mock
   build-depends:       base
+                     , cardano-lmdb
+                     , cardano-lmdb-simple
                      , containers
                      , directory
                      , exceptions
-                     , lmdb
-                     , lmdb-simple
                      , mtl
                      , QuickCheck
                      , quickcheck-dynamic
@@ -83,10 +83,10 @@ benchmark bench
                        Bench.Utils
   build-depends:       base
                      , bytestring
+                     , cardano-lmdb-simple
                      , containers
                      , deepseq
                      , directory
-                     , lmdb-simple
                      , QuickCheck
                      , random
                      , serialise
@@ -103,7 +103,7 @@ test-suite sample
   hs-source-dirs:      test
   main-is:             sample.hs
   build-depends:       base
-                     , lmdb-simple
+                     , cardano-lmdb-simple
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
@@ -116,7 +116,7 @@ test-suite hspec
                        Harness
   build-depends:       base
                      , hspec
-                     , lmdb-simple
+                     , cardano-lmdb-simple
                      , QuickCheck
   build-tool-depends:  hspec-discover:hspec-discover
   ghc-options:         -Wall -Wno-unused-do-bind
@@ -130,7 +130,7 @@ benchmark criterion
   other-modules:       Harness
   build-depends:       base
                      , criterion
-                     , lmdb-simple
+                     , cardano-lmdb-simple
   ghc-options:         -Wall -Wno-name-shadowing
                        -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010

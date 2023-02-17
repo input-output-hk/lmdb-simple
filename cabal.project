@@ -4,4 +4,4 @@ packages:
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/haskell-lmdb
-  tag: 08e5c1572e98e599d60bb24a7b2569879a35a7b1
+  tag: ad0a93ac52f06ba7ac67774f99e82b000e843432

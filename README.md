@@ -1,6 +1,17 @@
+[![Haskell CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/lmdb-simple/haskell.yml?label=Build&style=for-the-badge)](https://github.com/input-output-hk/lmdb-simple/actions/workflows/haskell.yml)
+[![handbook](https://img.shields.io/badge/policy-Cardano%20Engineering%20Handbook-informational?style=for-the-badge)](https://input-output-hk.github.io/cardano-engineering-handbook)
 
-Simple Haskell API for LMDB
-===========================
+# Input-Ouptut fork lmdb-simple
+
+See [INPUT-OUTPUT-FORK.md](./INPUT-OUPUT-FORK.md) for reasons for the current
+fork.
+
+We follow processes and guidelines as established by the Consensus team at IOG.
+A nice starting point for reading `ouroboros-consensus` documentation is
+[ouroboros-network/ouroboros-consensus/README.md](
+https://github.com/input-output-hk/ouroboros-network/blob/master/ouroboros-consensus/README.md).
+
+# Simple Haskell API for LMDB
 
 This package allows you to store arbitrary Haskell values in and retrieve them
 from a persistent [Lightning Memory-mapped Database][LMDB] on disk.
