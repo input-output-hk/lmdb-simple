@@ -45,6 +45,14 @@ library
                      , serialise >= 0.2 && < 0.3
                      , unliftio-core
   ghc-options:         -Wall -Wno-name-shadowing -Wno-unused-do-bind
+                       -Wcompat
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wpartial-fields
+                       -Widentities
+                       -Wredundant-constraints
+                       -Wmissing-export-lists
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
   default-extensions:  Trustworthy
   other-extensions:    ConstraintKinds
@@ -74,6 +82,7 @@ test-suite test-cursors
                      , temporary
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
                        -Werror
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
 
 benchmark bench
@@ -97,6 +106,7 @@ benchmark bench
                      , temporary
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
                        -with-rtsopts=-A32m -Werror
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
 
 test-suite sample
@@ -106,6 +116,7 @@ test-suite sample
   build-depends:       base
                      , cardano-lmdb-simple
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
 
 test-suite hspec
@@ -122,6 +133,7 @@ test-suite hspec
   build-tool-depends:  hspec-discover:hspec-discover
   ghc-options:         -Wall -Wno-unused-do-bind
                        -threaded -rtsopts -with-rtsopts=-N
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
 
 benchmark criterion
@@ -134,4 +146,5 @@ benchmark criterion
                      , cardano-lmdb-simple
   ghc-options:         -Wall -Wno-name-shadowing
                        -threaded -rtsopts -with-rtsopts=-N
+                       -Wno-unticked-promoted-constructors
   default-language:    Haskell2010

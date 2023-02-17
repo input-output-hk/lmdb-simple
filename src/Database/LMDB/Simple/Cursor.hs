@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
@@ -7,6 +8,8 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneKindSignatures   #-}
+
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Database.LMDB.Simple.Cursor (
     -- * The Cursor monad
@@ -115,6 +118,7 @@ data PeekPoke k v = PeekPoke {
 -- We perform lower-level cursor operations in @'IO'@, while the @'ReaderT'@
 -- passes along a @'CursorEnv'@ that contains all the information we need to
 -- perform the lower-level cursor operations.
+type CursorM :: Type -> Type -> Mode -> Type -> Type
 newtype CursorM k v mode a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
   deriving stock (Functor)
   deriving newtype (Applicative, Monad)
@@ -156,7 +160,7 @@ runCursorAsTransaction' cm (Db _ dbi) pp = Txn $ \txn ->
     alloca $ \vptr ->
       withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
 
-type CursorConstraints :: (Type -> Type -> Type) -> Type -> Type -> Type -> Constraint
+type CursorConstraints :: (Mode -> Type -> Type) -> Type -> Type -> Mode -> Constraint
 type CursorConstraints m k v mode = (
     MonadIO (m mode)
   , MonadReader (CursorEnv k v) (m mode)

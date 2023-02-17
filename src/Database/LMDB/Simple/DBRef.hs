@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 
 -- | This module provides a mutable variable 'DBRef' that is similar in
 -- concept to 'Data.IORef.IORef' except that it is tied to a particular key
@@ -32,8 +33,7 @@ import Database.LMDB.Simple.Internal
   ( Environment (..)
   , Transaction (..)
   , Database (..)
-  , ReadWrite
-  , ReadOnly
+  , Mode (..)
   , Serialise
   , serialiseBS
   , getBS

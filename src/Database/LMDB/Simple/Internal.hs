@@ -1,10 +1,14 @@
 {-# LANGUAGE LambdaCase   #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE Rank2Types #-}
 
 module Database.LMDB.Simple.Internal
-  ( ReadWrite
-  , ReadOnly
-  , Mode (..)
+  ( Mode (..)
+  , IsMode (..)
   , SubMode
   , Environment (..)
   , Transaction (..)
@@ -72,6 +76,10 @@ import Data.ByteString.Lazy
   )
 import qualified Data.ByteString.Lazy as BSL
 
+import Data.Kind (Type, Constraint)
+
+import Data.Proxy (Proxy (..))
+
 import Data.Word
   ( Word8
   )
@@ -104,31 +112,36 @@ import Foreign
   , copyBytes
   )
 
-import GHC.Exts
-  ( Constraint
-  )
+-- | Modes of operation for 'Environment's and 'Transaction's.
+--
+-- Note: See the documentation of 'SubMode' and 'Transaction'.
+data Mode = ReadWrite | ReadOnly
 
-data ReadWrite
-data ReadOnly
+-- | Reflect (on the term level) whether a @'Mode'@ is read-only or read-write
+type IsMode :: Mode -> Constraint
+class IsMode mode where
+  isReadOnlyMode :: proxy mode -> Bool
 
-class Mode a where
-  isReadOnlyMode :: a -> Bool
+instance IsMode ReadWrite where
+  isReadOnlyMode _ = False
+instance IsMode ReadOnly  where
+  isReadOnlyMode _ = True
 
-instance Mode ReadWrite where isReadOnlyMode _ = False
-instance Mode ReadOnly  where isReadOnlyMode _ = True
-
-type family SubMode a b :: Constraint where
-  SubMode a ReadWrite = a ~ ReadWrite
-  SubMode a ReadOnly  = ()
+-- | Both read-only and read-write transactions can run in a read-write
+-- environment, but read-only transactions can only run in read-only
+-- environments.
+type SubMode :: Mode -> Mode -> Constraint
+type family SubMode mode1 mode2 where
+  SubMode mode1 ReadWrite = mode1 ~ ReadWrite
+  SubMode mode1 ReadOnly  = ()
 
 -- | An LMDB environment is a directory or file on disk that contains one or
 -- more databases, and has an associated (reader) lock table.
+type Environment :: Mode -> Type
 newtype Environment mode = Env MDB_env
 
-isReadOnlyEnvironment :: Mode mode => Environment mode -> Bool
-isReadOnlyEnvironment = isReadOnlyMode . mode
-  where mode :: Environment mode -> mode
-        mode = undefined
+isReadOnlyEnvironment :: forall mode. IsMode mode => Environment mode -> Bool
+isReadOnlyEnvironment = isReadOnlyMode
 
 -- | An LMDB transaction is an atomic unit for reading and/or changing one or
 -- more LMDB databases within an environment, during which the transaction has
@@ -145,14 +158,13 @@ isReadOnlyEnvironment = isReadOnlyMode . mode
 -- 'MonadIO' instance so it is possible to perform arbitrary I/O within a
 -- transaction using 'liftIO'. However, such 'IO' actions are not atomic and
 -- cannot be rolled back if the transaction is aborted, so use with care.
+type Transaction :: Mode -> Type -> Type
 newtype Transaction mode a = Txn (MDB_txn -> IO a)
 
-isReadOnlyTransaction :: Mode mode => Transaction mode a -> Bool
-isReadOnlyTransaction = isReadOnlyMode . mode
-  where mode :: Transaction mode a -> mode
-        mode = undefined
+isReadOnlyTransaction :: forall mode a. IsMode mode => Transaction mode a -> Bool
+isReadOnlyTransaction _ = isReadOnlyMode (Proxy @mode)
 
-isReadWriteTransaction :: Mode mode => Transaction mode a -> Bool
+isReadWriteTransaction :: IsMode mode => Transaction mode a -> Bool
 isReadWriteTransaction = not . isReadOnlyTransaction
 
 instance Functor (Transaction mode) where
