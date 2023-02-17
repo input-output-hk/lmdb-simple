@@ -16,7 +16,6 @@ module Database.LMDB.Simple.Cursor (
   , PeekPoke (..)
   , runCursorAsTransaction
   , runCursorAsTransaction'
-  , runCursorM
     -- * Peek and poke keys and values
   , cpeekKey
   , cpeekValue
@@ -121,17 +120,6 @@ newtype CursorM k v mode a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
   deriving newtype (Applicative, Monad)
   deriving newtype (MonadIO, MonadReader (CursorEnv k v), MonadThrow, MonadCatch)
 
--- | Run a cursor monad in @'IO'@.
---
--- Note: this function ignores the type-level @mode@ information, which tracks
--- whether the cursor is performing @'ReadOnly'@ or @'ReadWrite'@ operations.
--- The user of this function should take care to provide a @'CursorEnv'@ with a
--- cursor pointer that is compatible with this @mode@. A safer alternative is to
--- use @'runCursorAsTransaction'@ or @'runCursorAsTransaction''@ in combination
--- with one of the @'Transaction'@ runners (like @'readWriteTransaction'@).
-runCursorM :: CursorM k v mode a -> CursorEnv k v -> IO a
-runCursorM cm = runReaderT (unCursorM cm)
-
 -- | Default runner for running a cursor monad as a @'Transaction'@.
 --
 -- Uses implicit @'Serialise'@ constraints to fill in the @'PeekPoke'@ record
@@ -144,7 +132,7 @@ runCursorAsTransaction ::
 runCursorAsTransaction cm (Db _ dbi) = Txn $ \txn ->
     alloca $ \kptr ->
       alloca $ \vptr ->
-        withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr pp))
+        withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
   where
     pp = PeekPoke {
         kPeek = peekMDBVal
@@ -166,7 +154,7 @@ runCursorAsTransaction' ::
 runCursorAsTransaction' cm (Db _ dbi) pp = Txn $ \txn ->
   alloca $ \kptr ->
     alloca $ \vptr ->
-      withCursor txn dbi (\c -> runCursorM cm (CursorEnv c kptr vptr pp))
+      withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
 
 type CursorConstraints :: (Type -> Type -> Type) -> Type -> Type -> Type -> Constraint
 type CursorConstraints m k v mode = (
