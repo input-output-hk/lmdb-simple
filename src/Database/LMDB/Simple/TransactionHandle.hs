@@ -34,6 +34,7 @@
 -}
 module Database.LMDB.Simple.TransactionHandle (
     TransactionHandle
+  , abort
   , commit
   , new
   , newReadOnly
@@ -126,11 +127,22 @@ submitReadOnly = submit
 submitReadWrite :: TransactionHandle ReadWrite -> Transaction ReadWrite a -> IO a
 submitReadWrite = submit
 
--- | Commit the transaction handle. Throws an error if the transaction handle
--- has already been committed.
+-- | Commit the transaction handle, discarding the internal transaction handle.
+-- Throws an error if the internal transaction handle has already been
+-- discarded.
 commit :: TransactionHandle mode -> IO ()
 commit TransactionHandle{thTxn} = do
   txnMay <- tryTakeMVar thTxn
   case txnMay of
-    Nothing  -> error "close: TransactionHandle already committed"
+    Nothing  -> error "commit: internal transaction handle aldreay discarded"
     Just txn -> mdb_txn_commit txn
+
+-- | Abort the transaction handle, discarding the internal transaction handle.
+-- Throws an error if the internal transaction handle has already been
+-- discarded.
+abort :: TransactionHandle mode -> IO ()
+abort TransactionHandle{thTxn} = do
+  txnMay <- tryTakeMVar thTxn
+  case txnMay of
+    Nothing  -> error "abort: internal transaction handle already discarded"
+    Just txn -> mdb_txn_abort txn
