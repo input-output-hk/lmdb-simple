@@ -11,25 +11,26 @@
 
   There are two downsides to regular @'Transaction'@s:
   * The current @'Transaction'@ runners (like @'readWriteTransaction'@) will
-    create and destroy an internal transaction handle (@'MDB_txn'@), which means
-    that we can not use the fact that the transaction handle provides a
-    consistent view of database if we want to perform several transactions to
-    the same consistent view.
+    create and destroy an internal transaction handle (@'MDB_txn'@) in a
+    bracketed style. Since internal transaction handles keep open a consistent
+    view of the database, this means that the transaction inside the bracket
+    will not be affected by other effects. If we want to perform several
+    transactions to the same consistent view, we would need to keep the
+    transaction handle open for longer, but the bracketed allocate-free style
+    for internal transaction handles prevents this.
   * A @'Transaction'@ will only produce results when it is run with
     @'readWriteTransaction'@ or one of the other runners. This prevents us from
     getting intermediate results or performing intermediate writes (side
-    effects).
+    effects). Instead, all results and effects will be performed in one go.
 
   A @'TransactionHandle'@ will keep open an internal LMDB transaction handle
-  (@'MDB_txn'@) in an @'MVar'@, such that we can submit the usuals
+  (@'MDB_txn'@) in an @'MVar'@, such that we can submit the usual
   @'Transaction'@s to it. Each submission will provide its results and peform
   its side effects right away.
 
   Note on terminology: whenever we speak of a transaction handle, we refer to a
   @'TransactionHandle'@, unless we say it is an /internal (LMDB)/ transaction
   handle, in which case we refer to an @'MDB_txn'@.
-
-  TODO: upstream this module to @lmdb-simple@.
 -}
 module Database.LMDB.Simple.TransactionHandle (
     TransactionHandle
@@ -66,11 +67,11 @@ newtype TransactionHandle mode = TransactionHandle {
 -- handle is garbage collected. This is not a strong guarantee, however, so
 -- using @'commit'@ is preferable.
 new ::
-     forall emode ptmode. (Mode ptmode, SubMode emode ptmode)
+     forall emode thmode. (Mode thmode, SubMode emode thmode)
   => Environment emode
-  -> IO (TransactionHandle ptmode)
+  -> IO (TransactionHandle thmode)
 new (Env mdbEnv) = do
-    txn <- mdb_txn_begin mdbEnv Nothing (isReadOnlyMode (undefined :: ptmode))
+    txn <- mdb_txn_begin mdbEnv Nothing (isReadOnlyMode (undefined :: thmode))
     thTxn <- newMVar txn
     void $ mkWeakMVar thTxn $ finalize thTxn
     pure TransactionHandle {thTxn}
@@ -97,8 +98,8 @@ newReadWrite = new
 -- | Submit a regular @'Transaction'@ to a transaction handle. Throws an error
 -- if the transaction handle was already committed.
 submit ::
-     (Mode tmode, SubMode ptmode tmode)
-  => TransactionHandle ptmode
+     (Mode tmode, SubMode thmode tmode)
+  => TransactionHandle thmode
   -> Transaction tmode a
   -> IO a
 submit TransactionHandle{thTxn} tx@(Txn tf) = do
