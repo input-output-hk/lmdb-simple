@@ -32,6 +32,7 @@ library
                        Database.LMDB.Simple.DBRef
                        Database.LMDB.Simple.Extra
                        Database.LMDB.Simple.Internal
+                       Database.LMDB.Simple.TransactionHandle
                        Database.LMDB.Simple.View
 
   build-depends:       async
