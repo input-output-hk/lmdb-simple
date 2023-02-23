@@ -18,23 +18,38 @@ jobs:
       matrix:
         ghc: ["8.10.7", "9.2.5"]
         cabal: ["3.8.1.0"]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
-    - name: Workaround runner image issue
-      if: runner.os == 'Linux'
-      # https://github.com/actions/runner-images/issues/7061
-      run: sudo chown -R $USER /usr/local/.ghcup
-
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: "LINUX: Install build environment (apt-get)"
+    - name: "Linux: Install system dependencies (apt-get)"
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get -y install liblmdb-dev
         sudo apt-get -y autoremove
+
+    - name: "MacOS: Install system dependencies (brew)"
+      if: runner.os == 'macOS'
+      run: |
+        brew install pkg-config lmdb
+        cp ./.github/workflows/lmdb.pc /usr/local/lib/pkgconfig
+
+    - name: "Windows: Install system dependencies via pacman (msys2)"
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        ghcup run -- pacman --noconfirm -S `
+          mingw-w64-x86_64-pkg-config `
+          mingw-w64-x86_64-lmdb
+
+    - name: "Windows: Update PATH"
+      if: runner.os == 'Windows'
+      run: |
+        $env:PATH=("C:\msys64\mingw64\bin;{0}" -f $env:PATH)
+        echo "PATH=$env:PATH" >> $env:GITHUB_ENV
 
     - name: Setup Haskell
       id: setup-haskell
@@ -43,6 +58,16 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
         cabal-update: false
+
+    - name: "Linux/MacOS: Configure cabal.project.local"
+      if: runner.os != 'Windows'
+      run: |
+        cp .github/workflows/cabal.project.local.Linux cabal.project.local
+
+    - name: "Windows: configure cabal.project.local"
+      if: runner.os == 'Windows'
+      run: |
+        cp .github/workflows/cabal.project.local.Windows cabal.project.local
 
     - name: Cabal update
       run: cabal update
