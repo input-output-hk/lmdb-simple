@@ -57,6 +57,8 @@ module Database.LMDB.Simple
   , openReadOnlyEnvironment
   , readOnlyEnvironment
   , clearStaleReaders
+  , copyEnvironment
+  , getPathEnvironment
 
     -- * Transactions
   , Transaction
@@ -119,6 +121,8 @@ import Database.LMDB.Raw
   , MDB_DbFlag (MDB_CREATE)
   , mdb_env_create
   , mdb_env_close
+  , mdb_env_copy
+  , mdb_env_get_path
   , mdb_env_open
   , mdb_env_set_mapsize
   , mdb_env_set_maxdbs
@@ -292,6 +296,14 @@ readOnlyEnvironment = coerce
 -- of entries cleared.
 clearStaleReaders :: Environment mode -> IO Int
 clearStaleReaders (Env env) = mdb_reader_check env
+
+-- | Copy the environment to an empty, existing directory.
+copyEnvironment :: Environment mode -> FilePath -> IO ()
+copyEnvironment (Env env) = mdb_env_copy env
+
+-- | Obtain filesystem path for this environment.
+getPathEnvironment :: Environment mode -> IO FilePath
+getPathEnvironment (Env env) = mdb_env_get_path env
 
 -- | Perform a top-level transaction in either 'ReadWrite' or 'ReadOnly'
 -- mode. A transaction may only be 'ReadWrite' if the environment is also
