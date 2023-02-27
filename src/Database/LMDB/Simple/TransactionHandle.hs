@@ -38,12 +38,12 @@ module Database.LMDB.Simple.TransactionHandle (
     TransactionHandle
   , abort
   , commit
-  , new
+  , _new
   , newReadOnly
-  , newReadWrite
-  , submit
+  , _newReadWrite
+  , _submit
   , submitReadOnly
-  , submitReadWrite
+  , _submitReadWrite
   ) where
 
 import           Control.Concurrent.MVar
@@ -73,11 +73,11 @@ newtype TransactionHandle mode = TransactionHandle {
 -- transaction handle will /likely/ be automatically freed once the transaction
 -- handle is garbage collected. This is not a strong guarantee, however, so
 -- using @'commit'@ is preferable.
-new ::
+_new ::
      forall emode thmode. (IsMode thmode, SubMode emode thmode)
   => Environment emode
   -> IO (TransactionHandle thmode)
-new (Env mdbEnv) = do
+_new (Env mdbEnv) = do
     txn <- mdb_txn_begin mdbEnv Nothing (isReadOnlyMode (Proxy @thmode))
     thTxn <- newMVar txn
     void $ mkWeakMVar thTxn $ finalize thTxn
@@ -94,22 +94,22 @@ new (Env mdbEnv) = do
 --
 -- See @'new'@ for more info about creating new transaction handles.
 newReadOnly :: Environment a -> IO (TransactionHandle ReadOnly)
-newReadOnly = new
+newReadOnly = _new
 
 -- | Create a new transaction handle in read-write mode.
 --
 -- See @'new'@ for more info about creating new transaction handles.
-newReadWrite :: Environment ReadWrite -> IO (TransactionHandle ReadWrite)
-newReadWrite = new
+_newReadWrite :: Environment ReadWrite -> IO (TransactionHandle ReadWrite)
+_newReadWrite = _new
 
 -- | Submit a regular @'Transaction'@ to a transaction handle. Throws an error
 -- if the transaction handle was already committed.
-submit ::
+_submit ::
      (IsMode tmode, SubMode thmode tmode)
   => TransactionHandle thmode
   -> Transaction tmode a
   -> IO a
-submit TransactionHandle{thTxn} tx@(Txn tf) = do
+_submit TransactionHandle{thTxn} tx@(Txn tf) = do
   txnMay <- tryReadMVar thTxn
   case txnMay of
     Nothing  -> error "submit: TransactionHandle is closed"
@@ -124,14 +124,14 @@ submit TransactionHandle{thTxn} tx@(Txn tf) = do
 -- See @'submit'@ for more info about submitting regular transactions to
 -- transaction handles.
 submitReadOnly :: TransactionHandle mode -> Transaction ReadOnly a -> IO a
-submitReadOnly = submit
+submitReadOnly = _submit
 
 -- | Submit a regular read-write @'Transaction'@ to a transaction handle.
 --
 -- See @'submit'@ for more info about submitting regular transactions to
 -- transaction handles.
-submitReadWrite :: TransactionHandle ReadWrite -> Transaction ReadWrite a -> IO a
-submitReadWrite = submit
+_submitReadWrite :: TransactionHandle ReadWrite -> Transaction ReadWrite a -> IO a
+_submitReadWrite = _submit
 
 -- | Commit the transaction handle, discarding the internal transaction handle.
 -- Throws an error if the internal transaction handle has already been
