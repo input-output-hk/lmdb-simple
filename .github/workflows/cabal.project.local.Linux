@@ -1,0 +1,7 @@
+max-backjumps: 5000
+reorder-goals: True
+ignore-project: False
+tests: True
+
+package cardano-lmdb-simple
+  ghc-options: -Werror

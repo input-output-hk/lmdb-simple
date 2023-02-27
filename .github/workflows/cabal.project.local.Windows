@@ -1,0 +1,11 @@
+max-backjumps: 5000
+reorder-goals: True
+ignore-project: False
+tests: True
+
+package cardano-lmdb-simple
+  ghc-options: -Werror
+
+package cardano-lmdb
+  extra-include-dirs: D:/a/_temp/msys64/mingw64/include
+  extra-lib-dirs: D:/a/_temp/msys64/mingw64/lib
