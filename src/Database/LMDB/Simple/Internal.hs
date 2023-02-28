@@ -129,7 +129,8 @@ instance IsMode ReadOnly  where
 
 -- | Both read-only and read-write transactions can run in a read-write
 -- environment, but read-only transactions can only run in read-only
--- environments.
+-- environments. @mode1@ would be the environment's mode, and @mode2@ would be
+-- the transaction's mode.
 type SubMode :: Mode -> Mode -> Constraint
 type family SubMode mode1 mode2 where
   SubMode mode1 ReadWrite = mode1 ~ ReadWrite
