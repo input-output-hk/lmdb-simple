@@ -38,12 +38,8 @@ module Database.LMDB.Simple.TransactionHandle (
     TransactionHandle
   , abort
   , commit
-  , _new
   , newReadOnly
-  , _newReadWrite
-  , _submit
   , submitReadOnly
-  , _submitReadWrite
   ) where
 
 import           Control.Concurrent.MVar
