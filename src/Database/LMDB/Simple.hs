@@ -1,7 +1,10 @@
-
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+
 {-|
 Module      : Database.LMDB.Simple
 Description : Simple Haskell API for LMDB
@@ -78,9 +81,7 @@ module Database.LMDB.Simple
   , clear
 
     -- * Access modes
-  , ReadWrite
-  , ReadOnly
-  , Mode
+  , Mode (..)
   , SubMode
   ) where
 
@@ -137,9 +138,8 @@ import Database.LMDB.Raw
   )
 
 import Database.LMDB.Simple.Internal
-  ( ReadWrite
-  , ReadOnly
-  , Mode
+  ( Mode (..)
+  , IsMode
   , SubMode
   , Environment (Env)
   , Transaction (Txn)
@@ -222,14 +222,14 @@ defaultLimits = Limits
 -- An environment opened in 'ReadOnly' mode may still modify the reader lock
 -- table (except when the filesystem is read-only, in which case no locks are
 -- used).
-openEnvironment :: forall mode. Mode mode => FilePath -> Limits -> IO (Environment mode)
+openEnvironment :: forall mode. IsMode mode => FilePath -> Limits -> IO (Environment mode)
 openEnvironment = openEnvironmentWithFlags flags where
   flags = [MDB_RDONLY | isReadOnlyEnvironment (undefined :: Environment mode)]
 
 
 -- | As 'openEnvironment' but using explicit LMDB environment flags.
 -- No effort is made to validate the flags.
-openEnvironmentWithFlags :: Mode mode => [MDB_EnvFlag] -> FilePath -> Limits -> IO (Environment mode)
+openEnvironmentWithFlags :: [MDB_EnvFlag] -> FilePath -> Limits -> IO (Environment mode)
 openEnvironmentWithFlags flags path limits = do
   env <- mdb_env_create
 
@@ -237,7 +237,7 @@ openEnvironmentWithFlags flags path limits = do
   mdb_env_set_maxdbs     env (maxDatabases limits)
   mdb_env_set_maxreaders env (maxReaders   limits)
 
-  let environ = Env env :: Mode mode => Environment mode
+  let environ = Env env :: Environment mode
 
   r <- tryJust (guard . isNotDirectoryError) $ mdb_env_open env path flags
   case r of
@@ -259,13 +259,13 @@ runInBoundThread' action = withAsyncBound action wait
 
 -- | Closes an open envrionment. After calling this function, the
 -- environment should *not* be used again.
-closeEnvironment :: Mode mode => Environment mode -> IO ()
+closeEnvironment :: Environment mode -> IO ()
 closeEnvironment (Env mdb_env) = runInBoundThread' $ mdb_env_close mdb_env
 
 -- | Closes an open envrionment as with 'closeEnvironment'. After calling this function, the
 -- environment should *not* be used again.
 -- Does not return until the environment is closed.
-closeEnvironmentBlocking :: Mode mode => Environment mode -> IO ()
+closeEnvironmentBlocking :: Environment mode -> IO ()
 closeEnvironmentBlocking (Env mdb_env) = do
   mv <- newEmptyMVar
   runInBoundThread' $ do
@@ -323,7 +323,7 @@ getPathEnvironment (Env env) = mdb_env_get_path env
 -- transactions, and thus the database can grow quickly. 'ReadWrite'
 -- transactions prevent other 'ReadWrite' transactions, since writes are
 -- serialized.
-transaction :: (Mode tmode, SubMode emode tmode)
+transaction :: (IsMode tmode, SubMode emode tmode)
             => Environment emode -> Transaction tmode a -> IO a
 transaction (Env env) tx@(Txn tf)
   | isReadOnlyTransaction tx = run True
@@ -403,7 +403,7 @@ transactionWithRunInIO inner = Txn $ \txn -> inner (\(Txn tf) -> tf txn)
 --
 -- You can (and should) retain the database handle returned by this action for
 -- use in future transactions.
-getDatabase :: Mode mode => Maybe String -> Transaction mode (Database k v)
+getDatabase :: IsMode mode => Maybe String -> Transaction mode (Database k v)
 getDatabase name = tx
   where tx = Txn $ \txn -> Db (mdb_txn_env txn) <$> mdb_dbi_open' txn name flags
         flags = [MDB_CREATE | isReadWriteTransaction tx]

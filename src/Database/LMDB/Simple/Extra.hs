@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 
 -- | This module exports many functions for querying and modifying LMDB
 -- databases using common idioms (albeit in monadic form).
@@ -70,7 +71,7 @@ import Database.LMDB.Raw
   )
 
 import Database.LMDB.Simple.Internal
-  ( ReadWrite
+  ( Mode (ReadWrite)
   , Transaction (Txn)
   , Database (Db)
   , Serialise

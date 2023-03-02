@@ -1,9 +1,11 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE KindSignatures      #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE Rank2Types          #-}
-{-# LANGUAGE RoleAnnotations     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE KindSignatures           #-}
+{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE Rank2Types               #-}
+{-# LANGUAGE RoleAnnotations          #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE TypeApplications         #-}
 
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
@@ -47,12 +49,16 @@ module Database.LMDB.Simple.TransactionHandle (
 import           Control.Concurrent.MVar
 import           Control.Monad
 
+import           Data.Kind
+import           Data.Proxy
+
 import           Database.LMDB.Raw
 import           Database.LMDB.Simple.Internal
 
 type role TransactionHandle nominal
 
 -- | A @'TransactionHandle'@ will keep open an internal LMDB transaction handle.
+type TransactionHandle :: Mode -> Type
 newtype TransactionHandle mode = TransactionHandle {
     -- Note: if @'thTxn'@ is an empty @'MVar'@, the transaction handle is
     -- considered to be committed. As such, we should not use any blocking
@@ -68,11 +74,11 @@ newtype TransactionHandle mode = TransactionHandle {
 -- handle is garbage collected. This is not a strong guarantee, however, so
 -- using @'commit'@ is preferable.
 new ::
-     forall emode thmode. (Mode thmode, SubMode emode thmode)
+     forall emode thmode. (IsMode thmode, SubMode emode thmode)
   => Environment emode
   -> IO (TransactionHandle thmode)
 new (Env mdbEnv) = do
-    txn <- mdb_txn_begin mdbEnv Nothing (isReadOnlyMode (undefined :: thmode))
+    txn <- mdb_txn_begin mdbEnv Nothing (isReadOnlyMode (Proxy @thmode))
     thTxn <- newMVar txn
     void $ mkWeakMVar thTxn $ finalize thTxn
     pure TransactionHandle {thTxn}
@@ -99,7 +105,7 @@ newReadWrite = new
 -- | Submit a regular @'Transaction'@ to a transaction handle. Throws an error
 -- if the transaction handle was already committed.
 submit ::
-     (Mode tmode, SubMode thmode tmode)
+     (IsMode tmode, SubMode thmode tmode)
   => TransactionHandle thmode
   -> Transaction tmode a
   -> IO a
