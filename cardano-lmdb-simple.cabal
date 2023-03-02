@@ -65,6 +65,7 @@ test-suite test-cursors
   other-modules:       Test.Database.LMDB.Simple.Cursor
                        Test.Database.LMDB.Simple.Cursor.Lockstep
                        Test.Database.LMDB.Simple.Cursor.Lockstep.Mock
+                       Test.Database.LMDB.Simple.TransactionHandle
   build-depends:       base
                      , cardano-lmdb
                      , cardano-lmdb-simple
@@ -81,7 +82,6 @@ test-suite test-cursors
                      , tasty-quickcheck
                      , temporary
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
-                       -Werror
                        -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
 
