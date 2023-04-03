@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
@@ -186,6 +187,7 @@ data Limits = Limits
                          -- transactions (also the number of slots in the lock
                          -- table)
   }
+  deriving stock (Show, Eq)
 
 -- | The default limits are 1 MiB map size, 0 named databases, and 126
 -- concurrent readers. These can be adjusted freely, and in particular the
