@@ -1,4 +1,11 @@
 
+<a id='changelog-0.6.1.0'></a>
+## 0.6.1.0 — 2023-05-11
+
+### Non-Breaking
+
+- Add `Show` and `Eq` instances for `Limits`
+
 <a id='changelog-0.6.0.0'></a>
 ## 0.6.0.0 — 2023-03-08
 
