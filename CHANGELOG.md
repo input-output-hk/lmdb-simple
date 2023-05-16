@@ -1,12 +1,10 @@
 
-<a id='changelog-0.6.1.0'></a>
 ## 0.6.1.0 — 2023-05-11
 
 ### Non-Breaking
 
 - Add `Show` and `Eq` instances for `Limits`
 
-<a id='changelog-0.6.0.0'></a>
 ## 0.6.0.0 — 2023-03-08
 
 ### Non-Breaking
@@ -35,7 +33,6 @@
 
 - Remove definitions for read-write transaction handles from the exports list of the `TransactionHandle` module. See [issue 14](https://github.com/input-output-hk/lmdb-simple/issues/14#issuecomment-1446841800).
 
-<a id='changelog-0.5.0.0'></a>
 ## 0.5.0.0 — 2023-02-17
 
 First release of `lmdb-simple` fork. See
