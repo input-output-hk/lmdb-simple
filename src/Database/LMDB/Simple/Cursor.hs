@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DataKinds                  #-}
@@ -8,7 +9,6 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneKindSignatures   #-}
-
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Database.LMDB.Simple.Cursor (
@@ -61,6 +61,9 @@ module Database.LMDB.Simple.Cursor (
   ) where
 
 import           Codec.Serialise
+#if __GLASGOW_HASKELL__ >= 906
+import           Control.Monad (void, foldM)
+#endif
 import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Data.Foldable
