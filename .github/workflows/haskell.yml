@@ -11,63 +11,57 @@ permissions:
 jobs:
   build:
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.sys.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.7"]
-        cabal: ["3.8.1.0"]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        ghc: ["8.10.7", "9.2.8", "9.4.5", "9.6.2"]
+        cabal: ["3.10.1.0"]
+        sys:
+          - { os: windows-latest, shell: 'C:/msys64/usr/bin/bash.exe -e {0}' }
+          - { os: ubuntu-latest, shell: bash }
+          - { os: macos-latest, shell: bash}
+
+    defaults:
+        run:
+          shell: ${{ matrix.sys.shell }}
 
     steps:
+    - name: Setup Base
+      uses: input-output-hk/actions/base@latest
+      with:
+        use-sodium-vrf: false
+
+    - name: Setup Haskell
+      id: setup-haskell
+      uses: input-output-hk/actions/haskell@latest
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: "Linux: Install system dependencies (apt-get)"
+    - name: "Install system dependencies (apt-get)"
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update
         sudo apt-get -y install liblmdb-dev
-        sudo apt-get -y autoremove
 
     - name: "MacOS: Install system dependencies (brew)"
       if: runner.os == 'macOS'
       run: |
-        brew install pkg-config lmdb
-        cp ./.github/workflows/lmdb.pc /usr/local/lib/pkgconfig
+        brew install lmdb
+        sudo cp ./.github/workflows/lmdb.pc /usr/local/lib/pkgconfig
 
     - name: "Windows: Install system dependencies via pacman (msys2)"
       if: runner.os == 'Windows'
-      shell: pwsh
       run: |
-        ghcup run -- pacman --noconfirm -S `
-          mingw-w64-x86_64-pkg-config `
-          mingw-w64-x86_64-lmdb
+        /usr/bin/pacman --noconfirm -S mingw-w64-x86_64-lmdb
 
-    - name: "Windows: Update PATH"
-      if: runner.os == 'Windows'
+    - name: "Configure cabal.project.local"
       run: |
-        $env:PATH=("C:\msys64\mingw64\bin;{0}" -f $env:PATH)
-        echo "PATH=$env:PATH" >> $env:GITHUB_ENV
-
-    - name: Setup Haskell
-      id: setup-haskell
-      uses: haskell/actions/setup@v2
-      with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: ${{ matrix.cabal }}
-        cabal-update: false
-
-    - name: "Linux/MacOS: Configure cabal.project.local"
-      if: runner.os != 'Windows'
-      run: |
-        cp .github/workflows/cabal.project.local.Linux cabal.project.local
-
-    - name: "Windows: configure cabal.project.local"
-      if: runner.os == 'Windows'
-      run: |
-        cp .github/workflows/cabal.project.local.Windows cabal.project.local
+        cp .github/workflows/cabal.project.local cabal.project.local
 
     - name: Cabal update
       run: cabal update
