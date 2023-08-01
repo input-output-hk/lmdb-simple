@@ -33,6 +33,14 @@
   Note on terminology: whenever we speak of a transaction handle, we refer to a
   @'TransactionHandle'@, unless we say it is an /internal (LMDB)/ transaction
   handle, in which case we refer to an @'MDB_txn'@.
+
+  TODO: We can currently not implement the submission of read-write
+  transactions, because the lower-level Haskell bindings are set up in such a
+  way that the internal 'MDB_txn' should be created and completed in a single
+  bound Haskell thread (see 'mdb_txn_begin'). This is not compatible with the
+  TransactionHandle use case, where the 'MDB_txn' is created separately from
+  where it is used. As such, only 'ReadOnly' transactions are provided by this
+  module.
 -}
 module Database.LMDB.Simple.TransactionHandle (
     TransactionHandle
