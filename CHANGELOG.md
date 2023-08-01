@@ -1,3 +1,8 @@
+## next version
+
+### Patch
+
+- Upgrade code to GHC 9.6.
 
 ## 0.6.1.0 — 2023-05-11
 
