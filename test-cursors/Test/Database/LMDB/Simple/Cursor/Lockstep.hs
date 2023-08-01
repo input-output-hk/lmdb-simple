@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -18,6 +19,9 @@ module Test.Database.LMDB.Simple.Cursor.Lockstep (tests) where
 import           Prelude                                        hiding (init)
 
 import           Control.Exception                              ()
+#if __GLASGOW_HASKELL__ >= 906
+import           Control.Monad ((<=<))
+#endif
 import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Data.Bifunctor
