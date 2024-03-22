@@ -11,9 +11,3 @@ repository cardano-haskell-packages
 
 packages:
   .
-
-source-repository-package
-  type: git
-  location: https://github.com/jasagredo/quickcheck-lockstep
-  tag: 883f2e54a495b6cca1c30cfafdcc70dc70ed6d0c
-  --sha256: 1309cs7p2zggq9klhd72c76xyinvi8vf2n8jxpbmibx2qbl9xr0d
