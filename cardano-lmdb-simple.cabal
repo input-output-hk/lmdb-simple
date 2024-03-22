@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                cardano-lmdb-simple
-version:             0.6.1.1
+version:             0.6.1.2
 synopsis:            Simple API for LMDB
 description:         This package provides a simple API for using the
                      Lightning Memory-mapped Database (LMDB).
