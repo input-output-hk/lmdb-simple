@@ -37,7 +37,7 @@ library
 
   build-depends:       async
                      , base >= 4.7 && < 5
-                     , bytestring >= 0.10 && < 0.13
+                     , bytestring >= 0.10 && < 0.12
                      , containers
                      , exceptions
                      , cardano-lmdb >= 0.3.0.0

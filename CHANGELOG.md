@@ -1,9 +1,3 @@
-## 0.6.1.2 — 2023-03-22
-
-### Patch
-
-- Relax upper bound on `bytestring` from `<0.12` to `<0.13`
-
 ## 0.6.1.1 — 2023 08-01
 
 ### Patch
