@@ -1,5 +1,5 @@
-[![handbook](https://img.shields.io/badge/policy-Cardano%20Engineering%20Handbook-informational)](https://input-output-hk.github.io/cardano-engineering-handbook)
-[![Haskell CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/ldmb-simple/haskell.yml?label=Build)](https://github.com/input-output-hk/lmdb-simple/actions/workflows/haskell.yml)
+[![Haskell CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/lmdb-simple/haskell.yml?label=Build&style=for-the-badge)](https://github.com/input-output-hk/lmdb-simple/actions/workflows/haskell.yml)
+[![handbook](https://img.shields.io/badge/policy-Cardano%20Engineering%20Handbook-informational?style=for-the-badge)](https://input-output-hk.github.io/cardano-engineering-handbook)
 
 # Input-Ouptut fork lmdb-simple
 
