@@ -3,10 +3,11 @@ module Main where
 
 import Database.LMDB.Simple
 import Control.Monad (forM_)
+import System.IO.Temp
 
 main :: IO ()
-main = do
-  env <- openEnvironment "test/env" defaultLimits
+main = withSystemTempDirectory "sample" $ \tmpDir -> do
+  env <- openEnvironment tmpDir defaultLimits
   db <- readOnlyTransaction env $ getDatabase Nothing :: IO (Database String Int)
 
   transaction env $ do
