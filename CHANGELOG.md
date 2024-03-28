@@ -8,8 +8,9 @@
 ### Patch
 
 - Add compatibility for GHC 9.8.
+- Weaken upper bound on `bytestring` from `<0.12` to `<0.13`
 
-## 0.6.1.1 — 2023 08-01
+## 0.6.1.1 — 2023-08-01
 
 ### Patch
 
