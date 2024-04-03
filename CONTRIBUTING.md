@@ -2,8 +2,31 @@
 
 ## Building
 
-The project is built using `ghc` and `cabal`, and does not require any external
-dependencies.
+Building the project requires LMDB to be installed on your system. Either build
+LMDB from source on any system, or use a package manager on Ubuntu/MacOS, or use
+`ghcup` on Windows.
+
+* **Ubuntu**:
+  ```
+  apt-get update
+  apt-get install pkg-config liblmdb-dev
+  ```
+* **MacOS**:
+  ```
+  brew update
+  brew install pkg-config lmdb
+  ```
+* **Windows**:
+  ```
+  ghcup run -- pacman --noconfirm -S `
+    mingw-w64-x86_64-pkg-config `
+    mingw-w64-x86_64-lmdb
+  ```
+  Make sure that the path to the install folder is included in your `PATH`
+  variable, e.g., "C:\msys64\bin".
+
+
+The project is built using `ghc` and `cabal`.
 
 ```
 cabal update
@@ -26,7 +49,9 @@ throughout the repository and favour readability. Code should be well-documented
 
 ## Formatting
 
-We use no formatter for Haskell or Cabal files, but try to keep the formatting consistent throughout the repository.
+We enforce no formatter for Haskell or Cabal files, but try to keep the
+formatting consistent throughout the repository. We suggest using
+`stylish-haskell` and `cabal-fmt` to keep formatting consistent.
 
 ## Pull requests
 
