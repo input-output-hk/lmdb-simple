@@ -1,3 +1,14 @@
+## next release — ????-??-??
+
+### Breaking
+
+- Restrict base to `>=4.14` and `<4.20`, which coincides with the GHC versions that
+  we have tested the package with.
+
+### Patch
+
+- Add compatibility for GHC 9.8.
+
 ## 0.6.1.1 — 2023 08-01
 
 ### Patch

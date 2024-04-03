@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -14,16 +13,17 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Test.Database.LMDB.Simple.Cursor.Lockstep (tests) where
 
 import           Prelude                                        hiding (init)
 
 import           Control.Exception                              ()
-#if __GLASGOW_HASKELL__ >= 906
-import           Control.Monad ((<=<))
-#endif
-import           Control.Monad.Catch
-import           Control.Monad.Reader
+import           Control.Monad                                  ((<=<))
+import           Control.Monad.Catch                            (MonadCatch (..),
+                                                                 MonadThrow (..))
+import           Control.Monad.IO.Class
 import           Data.Bifunctor
 import qualified Data.Map.Strict                                as Map
 import           Data.Maybe
@@ -32,9 +32,9 @@ import           Data.Typeable
 import           System.Directory
 import           System.IO.Temp
 
+import qualified Test.QuickCheck                                as QC
 import           Test.QuickCheck                                (Arbitrary, Gen,
                                                                  Property)
-import qualified Test.QuickCheck                                as QC
 import           Test.QuickCheck.StateModel
 import           Test.QuickCheck.StateModel.Lockstep            as Lockstep
 import           Test.QuickCheck.StateModel.Lockstep.Defaults   as Lockstep

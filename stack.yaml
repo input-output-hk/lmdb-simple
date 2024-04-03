@@ -1,8 +1,0 @@
-resolver: lts-20.7
-
-packages:
-- .
-
-extra-deps:
-  - git: https://github.com/input-output-hk/haskell-lmdb
-    commit: 08e5c1572e98e599d60bb24a7b2569879a35a7b1

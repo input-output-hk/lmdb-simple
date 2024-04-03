@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DataKinds                  #-}
@@ -61,11 +60,11 @@ module Database.LMDB.Simple.Cursor (
   ) where
 
 import           Codec.Serialise
-#if __GLASGOW_HASKELL__ >= 906
-import           Control.Monad (void, foldM)
-#endif
-import           Control.Monad.Catch
-import           Control.Monad.Reader
+import           Control.Monad                 (foldM, void)
+import           Control.Monad.Catch           (MonadCatch, MonadThrow)
+import           Control.Monad.IO.Class        (MonadIO (..))
+import           Control.Monad.Reader          (MonadReader (..), ReaderT (..),
+                                                asks)
 import           Data.Foldable
 import           Data.Kind
 import           Data.Map.Strict               (Map)
