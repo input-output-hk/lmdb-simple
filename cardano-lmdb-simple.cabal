@@ -17,7 +17,6 @@ tested-with:         GHC == { 8.10, 9.2, 9.4, 9.6, 9.8 }
 
 build-type:          Simple
 extra-source-files:  README.md
-                     test/env/.keep
 
 source-repository head
   type:              git
@@ -114,6 +113,7 @@ test-suite sample
   main-is:             sample.hs
   build-depends:       base
                      , cardano-lmdb-simple
+                     , temporary
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
                        -Wno-unticked-promoted-constructors
   default-language:    Haskell2010
@@ -126,9 +126,11 @@ test-suite hspec
                        Database.LMDB.Simple.DBRefSpec
                        Harness
   build-depends:       base
-                     , hspec
                      , cardano-lmdb-simple
+                     , directory
+                     , hspec
                      , QuickCheck
+                     , temporary
   build-tool-depends:  hspec-discover:hspec-discover
   ghc-options:         -Wall -Wno-unused-do-bind
                        -threaded -rtsopts -with-rtsopts=-N
@@ -142,7 +144,11 @@ benchmark criterion
   other-modules:       Harness
   build-depends:       base
                      , criterion
+                     , cardano-lmdb
                      , cardano-lmdb-simple
+                     , deepseq
+                     , directory
+                     , temporary
   ghc-options:         -Wall -Wno-name-shadowing
                        -threaded -rtsopts -with-rtsopts=-N
                        -Wno-unticked-promoted-constructors
