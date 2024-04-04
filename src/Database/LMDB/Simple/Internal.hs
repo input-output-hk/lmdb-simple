@@ -226,7 +226,7 @@ marshalOutBS bs f =
 
 copyLazyBS :: BSL.ByteString -> Ptr Word8 -> Int -> IO ()
 copyLazyBS lbs ptr rem =
-  foldM copyBS (ptr, rem) (toChunks lbs) >>= \case
+  foldM copyBS (castPtr ptr, rem) (toChunks lbs) >>= \case
       (_, 0) -> return ()
       (_, i) -> error ("Incomplete lazy bytestring copying, remaining bytes: " ++ show i)
 
@@ -287,7 +287,7 @@ putBS (Db _ dbi) keyBS value = Txn $ \txn ->
       sz = fromIntegral (BSL.length valueLBS)
   MDB_val len ptr <- mdb_reserve' defaultWriteFlags txn dbi kval sz
   let len' = fromIntegral len
-  assert (len' == sz) $ copyLazyBS valueLBS ptr len'
+  assert (len' == sz) $ copyLazyBS valueLBS (castPtr ptr) len'
 
 delete :: Serialise k => Database k v -> k -> Transaction ReadWrite Bool
 delete db = deleteBS db . serialiseBS

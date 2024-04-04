@@ -4,6 +4,7 @@
 
 - Restrict base to `>=4.14` and `<4.20`, which coincides with the GHC versions that
   we have tested the package with.
+- Use `cardano-lmdb-0.4.0.0`.
 
 ### Patch
 

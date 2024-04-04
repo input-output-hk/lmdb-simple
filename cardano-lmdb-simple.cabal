@@ -38,7 +38,7 @@ library
                      , bytestring >= 0.10 && < 0.13
                      , containers
                      , exceptions
-                     , cardano-lmdb >= 0.3.0.0
+                     , cardano-lmdb ^>= 0.4
                      , mtl
                      , serialise >= 0.2 && < 0.3
                      , unliftio-core

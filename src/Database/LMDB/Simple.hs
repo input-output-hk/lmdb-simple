@@ -250,8 +250,8 @@ openEnvironmentWithFlags flags path limits = do
 
   where isNotDirectoryError :: LMDB_Error -> Bool
         isNotDirectoryError LMDB_Error { e_code = Left code }
-          | Errno (fromIntegral code) == eNOTDIR = True
-        isNotDirectoryError _                    = False
+          | Errno code == eNOTDIR = True
+        isNotDirectoryError _     = False
 
 -- | Version of @runInBoundThread@ that may be safely interrupted.
 --
