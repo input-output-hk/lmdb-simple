@@ -17,18 +17,33 @@ permissions:
 jobs:
   # Build and test
   build:
-    runs-on: ${{ matrix.os }}
+    name: "haskell-ci (${{ matrix.ghc }}, ${{ matrix.sys.os }})"
+    runs-on: ${{ matrix.sys.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.4", "9.8.2"]
-        cabal: ["3.10.3.0"]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        ghc: ["8.10", "9.2", "9.4", "9.6", "9.8", "9.10"]
+        cabal: ["3.12.1.0"]
+        sys:
+          - { os: windows-latest, shell: "C:/msys64/usr/bin/bash.exe -e {0}" }
+          - { os: ubuntu-latest, shell: bash }
+          - { os: macos-latest, shell: bash }
+        exclude:
+        - ghc: "8.10"
+          sys: { os: macos-latest, shell: bash }
+        include:
+        - ghc: "8.10"
+          cabal: "3.12.1.0"
+          sys: { os: macos-13, shell: bash }
+
+    defaults:
+      run:
+        shell: ${{ matrix.sys.shell }}
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: "Linux: Install system dependencies (apt-get)"
       if: runner.os == 'Linux'
@@ -40,21 +55,18 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         brew update
-        brew install pkg-config lmdb
+        brew install lmdb
 
     - name: "Windows: Install system dependencies via pacman (msys2)"
       if: runner.os == 'Windows'
+      run: |
+          /usr/bin/pacman --noconfirm -S mingw-w64-x86_64-pkg-config  mingw-w64-x86_64-lmdb
+
+    - name: "Windows: update PATH"
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        ghcup run -- pacman --noconfirm -S `
-          mingw-w64-x86_64-pkg-config `
-          mingw-w64-x86_64-lmdb
-
-    - name: "Windows: Update PATH"
-      if: runner.os == 'Windows'
-      run: |
-        $env:PATH=("C:\msys64\mingw64\bin;{0}" -f $env:PATH)
-        echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+        "PATH=C:\\msys64\\mingw64\\bin;{0}" -f $env:PATH  >> $env:GITHUB_ENV
 
     - name: Setup Haskell
       id: setup-haskell
@@ -107,4 +119,4 @@ jobs:
 
     - name: Run tests
       run: |
-        cabal test -j1 --test-show-details=direct all
+        cabal test -j1 all
