@@ -1,3 +1,9 @@
+## 0.7.0.1 — 2024-10-04
+
+### Patch
+
+- Make it build with GHC 9.10.
+
 ## 0.7.0.0 — 2024-04-04
 
 ### Breaking

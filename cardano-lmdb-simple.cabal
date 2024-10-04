@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                cardano-lmdb-simple
-version:             0.7.0.0
+version:             0.7.0.1
 synopsis:            Simple API for LMDB
 description:         This package provides a simple API for using the
                      Lightning Memory-mapped Database (LMDB).
@@ -13,14 +13,19 @@ maintainer:          operations@iohk.io
 copyright:           © 2017–2018 Robert Leslie
 stability:           experimental
 category:            Database
-tested-with:         GHC == { 8.10, 9.2, 9.4, 9.6, 9.8 }
+tested-with:         GHC == { 8.10, 9.2, 9.4, 9.6, 9.8, 9.10 }
 
 build-type:          Simple
 extra-source-files:  README.md
 
 source-repository head
-  type:              git
-  location:          https://github.com/input-output-hk/lmdb-simple.git
+  type:     git
+  location: https://github.com/input-output-hk/lmdb-simple.git
+
+source-repository head
+  type:     git
+  location: https://github.com/input-output-hk/lmdb-simple.git
+  tag:      cardano-lmdb-simple-0.7.0.1
 
 library
   hs-source-dirs:      src
@@ -34,7 +39,7 @@ library
                        Database.LMDB.Simple.View
 
   build-depends:       async
-                     , base >= 4.14 && < 4.20
+                     , base >= 4.14 && < 4.21
                      , bytestring >= 0.10 && < 0.13
                      , containers
                      , exceptions
