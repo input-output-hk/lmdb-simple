@@ -22,6 +22,7 @@ module Database.LMDB.Simple.Internal
   , serialiseBS
   , marshalOut
   , marshalOutBS
+  , copyBS
   , copyLazyBS
   , marshalIn
   , peekMDBVal
@@ -230,10 +231,10 @@ copyLazyBS lbs ptr rem =
       (_, 0) -> return ()
       (_, i) -> error ("Incomplete lazy bytestring copying, remaining bytes: " ++ show i)
 
-  where copyBS :: (Ptr Word8, Int) -> BS.ByteString -> IO (Ptr Word8, Int)
-        copyBS (ptr, rem) bs = unsafeUseAsCStringLen bs $ \(bsp, len) ->
-          assert (len <= rem) $ copyBytes ptr (castPtr bsp) len >>
-          return (ptr `plusPtr` len, rem - len)
+copyBS :: (Ptr Word8, Int) -> BS.ByteString -> IO (Ptr Word8, Int)
+copyBS (ptr, rem) bs = unsafeUseAsCStringLen bs $ \(bsp, len) ->
+  assert (len <= rem) $ copyBytes ptr (castPtr bsp) len >>
+  return (ptr `plusPtr` len, rem - len)
 
 forEach :: MDB_cursor_op -> MDB_cursor_op
         -> MDB_txn -> MDB_dbi' -> Ptr MDB_val -> Ptr MDB_val
