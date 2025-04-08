@@ -236,7 +236,7 @@ instance ( Show k, Show v
   modelNextState ::
        forall a.
        LockstepAction (CursorState k v) a
-    -> ModelLookUp (CursorState k v)
+    -> ModelVarContext (CursorState k v)
     -> CursorState k v
     -> ( CursorVal k v a
        , CursorState k v
@@ -253,13 +253,13 @@ instance ( Show k, Show v
   usedVars = const []
 
   arbitraryWithVars ::
-       ModelFindVariables (CursorState k v)
+       ModelVarContext (CursorState k v)
     -> CursorState k v
     -> Gen (Any (LockstepAction (CursorState k v)))
   arbitraryWithVars = arbitraryCursorAction
 
   shrinkWithVars ::
-       ModelFindVariables (CursorState k v)
+       ModelVarContext (CursorState k v)
     -> CursorState k v
     -> LockstepAction (CursorState k v) a
     -> [Any (LockstepAction (CursorState k v))]
@@ -304,7 +304,7 @@ instance (Show k, Show v, Eq k, Eq v, Ord k, Typeable k, Typeable v
 
 runMock ::
      (Ord k, Eq v)
-  => ModelLookUp (CursorState k v)
+  => ModelVarContext (CursorState k v)
   -> Action (Lockstep (CursorState k v)) a
   -> Mock k v
   -> ( CursorVal k v a
@@ -334,7 +334,7 @@ runMock _lookUp = \case
 
 arbitraryCursorAction ::
      forall k v. (Ord k, Eq v, Typeable k, Typeable v, Arbitrary k, Arbitrary v)
-  => ModelFindVariables (CursorState k v)
+  => ModelVarContext (CursorState k v)
   -> CursorState k v
   -> Gen (Any (LockstepAction (CursorState k v)))
 arbitraryCursorAction _findVars (CursorState m _stats) = QC.oneof withoutVars
@@ -411,7 +411,7 @@ arbitraryCursorAction _findVars (CursorState m _stats) = QC.oneof withoutVars
 
 shrinkCursorAction ::
        forall k v a. (Eq k, Eq v, Typeable k, Typeable v, Arbitrary k, Arbitrary v)
-    => ModelFindVariables (CursorState k v)
+    => ModelVarContext (CursorState k v)
     -> CursorState k v
     -> LockstepAction (CursorState k v) a
     -> [Any (LockstepAction (CursorState k v))]

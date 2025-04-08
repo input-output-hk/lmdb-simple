@@ -1,3 +1,15 @@
+## 0.8.0.1 — 2025-04-08
+
+### Patch
+
+- Make it build with GHC 9.12.
+
+## 0.8.0.0 — 2024-12-20
+
+### Breaking
+
+- Expose `copyBS`.
+
 ## 0.7.0.1 — 2024-10-04
 
 ### Patch
