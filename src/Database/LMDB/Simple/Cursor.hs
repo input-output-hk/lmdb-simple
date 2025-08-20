@@ -57,6 +57,7 @@ module Database.LMDB.Simple.Cursor (
   , cfoldM
   , cgetAll
   , cgetMany
+  , cgetManyAndLast
   ) where
 
 import           Codec.Serialise
@@ -551,3 +552,16 @@ cgetMany lbMay n = cfoldM f Map.empty (FoldRange lbMay n)
   where
     f :: Map k v -> k -> v -> m mode (Map k v)
     f m k v = pure $ Map.insert k v m
+
+-- | This variant of @'cgetMany'@ is intended to be used if the serialised form 
+-- of @k@ has a different order than the one imposed by @Ord k@.
+cgetManyAndLast ::
+     forall m k v mode.
+     (CursorConstraints m k v mode, Ord k)
+  => Maybe (k, Bound)
+  -> Int
+  -> m mode (Map k v, Maybe k)
+cgetManyAndLast lbMay n = cfoldM f (Map.empty, Nothing) (FoldRange lbMay n)
+  where
+    f :: (Map k v, Maybe k) -> k -> v -> m mode (Map k v, Maybe k)
+    f (!m, _) k v = pure (Map.insert k v m, Just k)
