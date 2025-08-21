@@ -1,3 +1,9 @@
+## 0.8.1.0 — 2025-08-20
+
+### Non-breaking
+
+- Expose `cgetManyAndLast`.
+
 ## 0.8.0.1 — 2025-04-08
 
 ### Patch
