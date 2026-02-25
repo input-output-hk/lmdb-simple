@@ -2,7 +2,6 @@
 
 -- | This module exports many functions for querying and modifying LMDB
 -- databases using common idioms (albeit in monadic form).
-
 module Database.LMDB.Simple.Extra
   ( -- * Query
     null
@@ -42,6 +41,43 @@ module Database.LMDB.Simple.Extra
   , toList
   ) where
 
+import Control.Monad
+  ( void
+  )
+import Data.Maybe
+  ( fromMaybe
+  , isJust
+  )
+import Database.LMDB.Raw
+  ( MDB_WriteFlags
+  , MDB_cursor'
+  , MDB_cursor_op (MDB_SET)
+  , MDB_stat (ms_entries)
+  , MDB_val
+  , mdb_cursor_del'
+  , mdb_cursor_get'
+  , mdb_cursor_put'
+  , mdb_stat'
+  )
+import Database.LMDB.Simple.Internal
+  ( Database (Db)
+  , Mode (ReadWrite)
+  , Serialise
+  , Transaction (Txn)
+  , defaultWriteFlags
+  , forEachForward
+  , forEachReverse
+  , marshalOut
+  , overwriteFlags
+  , peekMDBVal
+  , withCursor
+  )
+import qualified Database.LMDB.Simple.Internal as Internal
+import Foreign
+  ( alloca
+  , nullPtr
+  , with
+  )
 import Prelude hiding
   ( foldl
   , foldr
@@ -49,60 +85,20 @@ import Prelude hiding
   , null
   )
 
-import Control.Monad
-  ( void
-  )
-
-import Data.Maybe
-  ( fromMaybe
-  , isJust
-  )
-
-import Database.LMDB.Raw
-  ( MDB_stat (ms_entries)
-  , MDB_val
-  , MDB_cursor_op (MDB_SET)
-  , MDB_cursor'
-  , MDB_WriteFlags
-  , mdb_stat'
-  , mdb_cursor_get'
-  , mdb_cursor_put'
-  , mdb_cursor_del'
-  )
-
-import Database.LMDB.Simple.Internal
-  ( Mode (ReadWrite)
-  , Transaction (Txn)
-  , Database (Db)
-  , Serialise
-  , forEachForward
-  , forEachReverse
-  , marshalOut
-  , peekMDBVal
-  , withCursor
-  , defaultWriteFlags
-  , overwriteFlags
-  )
-import qualified Database.LMDB.Simple.Internal as Internal
-
-import Foreign
-  ( alloca
-  , nullPtr
-  , with
-  )
-
 -- | Lookup the value at a key in the database.
 --
 -- The function will return the corresponding value as @('Just' value)@, or
 -- 'Nothing' if the key isn't in the database.
-lookup :: (Serialise k, Serialise v)
-       => k -> Database k v -> Transaction mode (Maybe v)
+lookup ::
+  (Serialise k, Serialise v) =>
+  k -> Database k v -> Transaction mode (Maybe v)
 lookup = flip Internal.get
 
 -- | The expression @('findWithDefault' def k db)@ returns the value at key
 -- @k@ or returns default value @def@ when the key is not in the database.
-findWithDefault :: (Serialise k, Serialise v)
-                => v -> k -> Database k v -> Transaction mode v
+findWithDefault ::
+  (Serialise k, Serialise v) =>
+  v -> k -> Database k v -> Transaction mode v
 findWithDefault def key db = fromMaybe def <$> lookup key db
 
 -- | Is the database empty?
@@ -128,16 +124,18 @@ notMember key db = not <$> member key db
 -- | Insert a new key and value in the database. If the key is already present
 -- in the database, the associated value is replaced with the supplied
 -- value. 'insert' is equivalent to @'insertWith' 'const'@.
-insert :: (Serialise k, Serialise v)
-       => k -> v -> Database k v -> Transaction ReadWrite ()
+insert ::
+  (Serialise k, Serialise v) =>
+  k -> v -> Database k v -> Transaction ReadWrite ()
 insert key value db = Internal.put db key value
 
 -- | Insert with a function, combining new value and old value. @'insertWith'
 -- f key value db@ will insert the pair @(key, value)@ into @db@ if key does
 -- not exist in the database. If the key does exist, the function will insert
 -- the pair @(key, f new_value old_value)@.
-insertWith :: (Serialise k, Serialise v)
-           => (v -> v -> v) -> k -> v -> Database k v -> Transaction ReadWrite ()
+insertWith ::
+  (Serialise k, Serialise v) =>
+  (v -> v -> v) -> k -> v -> Database k v -> Transaction ReadWrite ()
 insertWith f = insertWithKey (const f)
 
 -- | Insert with a function, combining key, new value and old
@@ -145,32 +143,43 @@ insertWith f = insertWithKey (const f)
 -- into @db@ if key does not exist in the database. If the key does exist, the
 -- function will insert the pair @(key, f key new_value old_value)@. Note that
 -- the key passed to @f@ is the same key passed to 'insertWithKey'.
-insertWithKey :: (Serialise k, Serialise v)
-              => (k -> v -> v -> v) -> k -> v -> Database k v
-              -> Transaction ReadWrite ()
+insertWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> v -> v) ->
+  k ->
+  v ->
+  Database k v ->
+  Transaction ReadWrite ()
 insertWithKey f key value = void . insertLookupWithKey f key value
 
 -- | Combines insert operation with old value retrieval. The monadic action
 -- @('insertLookupWithKey' f k x db)@ returns the same value as @('lookup' k
 -- db)@ but has the same effect as @('insertWithKey' f k x db)@.
-insertLookupWithKey :: (Serialise k, Serialise v)
-                    => (k -> v -> v -> v) -> k -> v -> Database k v
-                    -> Transaction ReadWrite (Maybe v)
+insertLookupWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> v -> v) ->
+  k ->
+  v ->
+  Database k v ->
+  Transaction ReadWrite (Maybe v)
 insertLookupWithKey f key value (Db _ dbi) = Txn $ \txn ->
   withCursor txn dbi $ \cursor -> marshalOut key $ \kval ->
-  with kval $ \kptr -> alloca $ \vptr -> do
-    found <- mdb_cursor_get' MDB_SET cursor kptr vptr
-    if found
-      then do oldValue <- peekMDBVal vptr
-              cursorPut cursor overwriteFlags kval (f key value oldValue)
-              return (Just oldValue)
-      else do cursorPut cursor defaultWriteFlags kval value
-              return  Nothing
-
-  where cursorPut :: Serialise v
-                  => MDB_cursor' -> MDB_WriteFlags -> MDB_val -> v -> IO Bool
-        cursorPut cursor writeFlags kval value = marshalOut value $ \vval ->
-          mdb_cursor_put' writeFlags cursor kval vval
+    with kval $ \kptr -> alloca $ \vptr -> do
+      found <- mdb_cursor_get' MDB_SET cursor kptr vptr
+      if found
+        then do
+          oldValue <- peekMDBVal vptr
+          cursorPut cursor overwriteFlags kval (f key value oldValue)
+          return (Just oldValue)
+        else do
+          cursorPut cursor defaultWriteFlags kval value
+          return Nothing
+ where
+  cursorPut ::
+    Serialise v =>
+    MDB_cursor' -> MDB_WriteFlags -> MDB_val -> v -> IO Bool
+  cursorPut cursor writeFlags kval value = marshalOut value $ \vval ->
+    mdb_cursor_put' writeFlags cursor kval vval
 
 -- | Return all elements of the database in the order of their keys.
 elems :: Serialise v => Database k v -> Transaction mode [v]
@@ -180,8 +189,8 @@ elems = foldr (:) []
 keys :: Serialise k => Database k v -> Transaction mode [k]
 keys (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
-  forEachForward txn dbi kptr nullPtr [] $ \rest ->
-  (:) <$> peekMDBVal kptr <*> rest
+    forEachForward txn dbi kptr nullPtr [] $ \rest ->
+      (:) <$> peekMDBVal kptr <*> rest
 
 -- | Convert the database to a list of key/value pairs. Note that this will
 -- make a copy of the entire database in memory.
@@ -193,40 +202,43 @@ toList = foldrWithKey (\k v -> ((k, v) :)) []
 foldr :: Serialise v => (v -> b -> b) -> b -> Database k v -> Transaction mode b
 foldr f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \vptr ->
-  forEachForward txn dbi nullPtr vptr z $ \rest ->
-  f <$> peekMDBVal vptr <*> rest
+    forEachForward txn dbi nullPtr vptr z $ \rest ->
+      f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given
 -- right-associative binary operator.
-foldrWithKey :: (Serialise k, Serialise v)
-             => (k -> v -> b -> b) -> b -> Database k v -> Transaction mode b
+foldrWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> b -> b) -> b -> Database k v -> Transaction mode b
 foldrWithKey f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
-  alloca $ \vptr ->
-  forEachForward txn dbi kptr vptr z $ \rest ->
-  f <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
+    alloca $ \vptr ->
+      forEachForward txn dbi kptr vptr z $ \rest ->
+        f <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the values in the database using the given left-associative binary
 -- operator.
 foldl :: Serialise v => (a -> v -> a) -> a -> Database k v -> Transaction mode a
 foldl f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \vptr ->
-  forEachReverse txn dbi nullPtr vptr z $ \rest ->
-  flip f <$> peekMDBVal vptr <*> rest
+    forEachReverse txn dbi nullPtr vptr z $ \rest ->
+      flip f <$> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given left-associative
 -- binary operator.
-foldlWithKey :: (Serialise k, Serialise v)
-             => (a -> k -> v -> a) -> a -> Database k v -> Transaction mode a
+foldlWithKey ::
+  (Serialise k, Serialise v) =>
+  (a -> k -> v -> a) -> a -> Database k v -> Transaction mode a
 foldlWithKey f z (Db _ dbi) = Txn $ \txn ->
   alloca $ \kptr ->
-  alloca $ \vptr ->
-  forEachReverse txn dbi kptr vptr z $ \rest ->
-  (\k v a -> f a k v) <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
+    alloca $ \vptr ->
+      forEachReverse txn dbi kptr vptr z $ \rest ->
+        (\k v a -> f a k v) <$> peekMDBVal kptr <*> peekMDBVal vptr <*> rest
 
 -- | Fold the keys and values in the database using the given monoid.
-foldDatabaseWithKey :: (Monoid m, Serialise k, Serialise v)
-                    => (k -> v -> m) -> Database k v -> Transaction mode m
+foldDatabaseWithKey ::
+  (Monoid m, Serialise k, Serialise v) =>
+  (k -> v -> m) -> Database k v -> Transaction mode m
 foldDatabaseWithKey f = foldrWithKey (\k v a -> f k v `mappend` a) mempty
 
 -- | Delete a key and its value from the database. If the key was not present
@@ -237,64 +249,79 @@ delete = flip Internal.delete
 -- | Update a value at a specific key with the result of the provided
 -- function. When the key is not a member of the database, this returns
 -- 'False'; otherwise it returns 'True'.
-adjust :: (Serialise k, Serialise v)
-       => (v -> v) -> k -> Database k v -> Transaction ReadWrite Bool
+adjust ::
+  (Serialise k, Serialise v) =>
+  (v -> v) -> k -> Database k v -> Transaction ReadWrite Bool
 adjust f = adjustWithKey (const f)
 
 -- | Adjust a value at a specific key. When the key is not a member of the
 -- database, this returns 'False'; otherwise it returns 'True'.
-adjustWithKey :: (Serialise k, Serialise v)
-              => (k -> v -> v) -> k -> Database k v -> Transaction ReadWrite Bool
+adjustWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> v) -> k -> Database k v -> Transaction ReadWrite Bool
 adjustWithKey f = updateWithKey (\k v -> Just $ f k v)
 
 -- | The monadic action @('update' f k db)@ updates the value @x@ at @k@ (if
 -- it is in the database). If @(f x)@ is 'Nothing', the element is deleted. If
 -- it is @('Just' y)@, the key @k@ is bound to the new value @y@.
-update :: (Serialise k, Serialise v)
-       => (v -> Maybe v) -> k -> Database k v -> Transaction ReadWrite Bool
+update ::
+  (Serialise k, Serialise v) =>
+  (v -> Maybe v) -> k -> Database k v -> Transaction ReadWrite Bool
 update f = updateWithKey (const f)
 
 -- | The monadic action @('updateWithKey' f k db)@ updates the value @x@ at
 -- @k@ (if it is in the database). If @(f k x)@ is 'Nothing', the element is
 -- deleted. If it is @('Just' y)@, the key @k@ is bound to the new value @y@.
-updateWithKey :: (Serialise k, Serialise v)
-              => (k -> v -> Maybe v) -> k -> Database k v
-              -> Transaction ReadWrite Bool
+updateWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> Maybe v) ->
+  k ->
+  Database k v ->
+  Transaction ReadWrite Bool
 updateWithKey f key db = isJust <$> updateLookupWithKey f key db
 
 -- | Lookup and update. See also 'updateWithKey'. The function returns changed
 -- value, if it is updated. Returns the original key value if the database
 -- entry is deleted.
-updateLookupWithKey :: (Serialise k, Serialise v)
-                    => (k -> v -> Maybe v) -> k -> Database k v
-                    -> Transaction ReadWrite (Maybe v)
+updateLookupWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> v -> Maybe v) ->
+  k ->
+  Database k v ->
+  Transaction ReadWrite (Maybe v)
 updateLookupWithKey f = alterWithKey (maybe Nothing . f)
 
 -- | The monadic action @('alter' f k db)@ alters the value @x@ at @k@, or
 -- absence thereof. 'alter' can be used to insert, delete, or update a value
 -- in a database.
-alter :: (Serialise k, Serialise v)
-      => (Maybe v -> Maybe v) -> k -> Database k v -> Transaction ReadWrite ()
+alter ::
+  (Serialise k, Serialise v) =>
+  (Maybe v -> Maybe v) -> k -> Database k v -> Transaction ReadWrite ()
 alter f key db = void $ alterWithKey (const f) key db
 
-alterWithKey :: (Serialise k, Serialise v)
-             => (k -> Maybe v -> Maybe v) -> k -> Database k v
-             -> Transaction ReadWrite (Maybe v)
+alterWithKey ::
+  (Serialise k, Serialise v) =>
+  (k -> Maybe v -> Maybe v) ->
+  k ->
+  Database k v ->
+  Transaction ReadWrite (Maybe v)
 alterWithKey f key (Db _ dbi) = Txn $ \txn ->
   withCursor txn dbi $ \cursor -> marshalOut key $ \kval ->
-  with kval $ \kptr -> alloca $ \vptr -> do
-    found <- mdb_cursor_get' MDB_SET cursor kptr vptr
-    if found
-      then peekMDBVal vptr >>= \oldValue -> do
-        let old = Just oldValue
-        case f key old of
+    with kval $ \kptr -> alloca $ \vptr -> do
+      found <- mdb_cursor_get' MDB_SET cursor kptr vptr
+      if found
+        then
+          peekMDBVal vptr >>= \oldValue -> do
+            let old = Just oldValue
+            case f key old of
+              new@(Just newValue) -> marshalOut newValue $ \vval ->
+                mdb_cursor_put' overwriteFlags cursor kval vval
+                  >> return new
+              Nothing ->
+                mdb_cursor_del' defaultWriteFlags cursor
+                  >> return old
+        else case f key Nothing of
           new@(Just newValue) -> marshalOut newValue $ \vval ->
-            mdb_cursor_put' overwriteFlags cursor kval vval >>
-            return new
-          Nothing -> mdb_cursor_del' defaultWriteFlags cursor >>
-            return old
-      else case f key Nothing of
-             new@(Just newValue) -> marshalOut newValue $ \vval ->
-               mdb_cursor_put' defaultWriteFlags cursor kval vval >>
-               return new
-             Nothing -> return Nothing
+            mdb_cursor_put' defaultWriteFlags cursor kval vval
+              >> return new
+          Nothing -> return Nothing

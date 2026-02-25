@@ -1,3 +1,9 @@
+## 0.8.1.1 - 2926-02-25
+
+### Patch
+
+- Make it build with GHC 9.14.
+
 ## 0.8.1.0 — 2025-08-20
 
 ### Non-breaking

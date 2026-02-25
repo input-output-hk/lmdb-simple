@@ -1,28 +1,30 @@
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneKindSignatures   #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
-module Database.LMDB.Simple.Cursor (
-    -- * The Cursor monad
+module Database.LMDB.Simple.Cursor
+  ( -- * The Cursor monad
     CursorConstraints
   , CursorEnv (..)
   , CursorM (..)
   , PeekPoke (..)
   , runCursorAsTransaction
   , runCursorAsTransaction'
+
     -- * Peek and poke keys and values
   , cpeekKey
   , cpeekValue
   , cpokeKey
   , cpokeValue
+
     -- * Basic monadic cursor operations: get
   , MDB_cursor_op (..)
   , cgetG
@@ -37,6 +39,7 @@ module Database.LMDB.Simple.Cursor (
   , cgetSet
   , cgetSetKey
   , cgetSetRange
+
     -- * Basic monadic cursor operations: put
   , CPutFlag (..)
   , cputG
@@ -44,10 +47,12 @@ module Database.LMDB.Simple.Cursor (
   , cputCurrent
   , cputNoOverwrite
   , cputAppend
+
     -- * Basic monadic cursor operations: delete
   , CDelFlag (..)
   , cdelG
   , cdel
+
     -- * Cursor folds
   , Bound (..)
   , FoldRange (..)
@@ -60,21 +65,27 @@ module Database.LMDB.Simple.Cursor (
   , cgetManyAndLast
   ) where
 
-import           Codec.Serialise
-import           Control.Monad                 (foldM, void)
-import           Control.Monad.Catch           (MonadCatch, MonadThrow)
-import           Control.Monad.IO.Class        (MonadIO (..))
-import           Control.Monad.Reader          (MonadReader (..), ReaderT (..),
-                                                asks)
-import           Data.Foldable
-import           Data.Kind
-import           Data.Map.Strict               (Map)
-import qualified Data.Map.Strict               as Map
-import           Foreign                       (Ptr, alloca, nullPtr)
-
-import           Database.LMDB.Raw
-import           Database.LMDB.Simple.Internal hiding (forEachForward,
-                                                forEachReverse, get, put)
+import Codec.Serialise
+import Control.Monad (foldM, void)
+import Control.Monad.Catch (MonadCatch, MonadThrow)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Reader
+  ( MonadReader (..)
+  , ReaderT (..)
+  , asks
+  )
+import Data.Foldable
+import Data.Kind
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Database.LMDB.Raw
+import Database.LMDB.Simple.Internal hiding
+  ( forEachForward
+  , forEachReverse
+  , get
+  , put
+  )
+import Foreign (Ptr, alloca, nullPtr)
 
 {-------------------------------------------------------------------------------
   The Cursor monad
@@ -88,18 +99,18 @@ import           Database.LMDB.Simple.Internal hiding (forEachForward,
 -- what these pointers reference will give us the read key and value. If we
 -- write a key-value pair using the cursor, then the LMDB software will read the
 -- target key and value from the pointers.
-data CursorEnv k v = CursorEnv {
-    -- | A pointer to a lower-level cursor provided by the LMDB Haskell binding.
-    --
-    -- An LMDB cursor points to an entry in the database. We can read/write on
-    -- on this cursor, or move the cursor to different entries in the database.
-    cursor :: MDB_cursor'
-    -- | A pointer that can hold a key.
-  , kPtr   :: Ptr MDB_val
-    -- | A pointer that can hold a value.
-  , vPtr   :: Ptr MDB_val
-    -- | Record of functions for peeking/poking pointers to keys and values.
-  , pp     :: PeekPoke k v
+data CursorEnv k v = CursorEnv
+  { cursor :: MDB_cursor'
+  -- ^ A pointer to a lower-level cursor provided by the LMDB Haskell binding.
+  --
+  -- An LMDB cursor points to an entry in the database. We can read/write on
+  -- on this cursor, or move the cursor to different entries in the database.
+  , kPtr :: Ptr MDB_val
+  -- ^ A pointer that can hold a key.
+  , vPtr :: Ptr MDB_val
+  -- ^ A pointer that can hold a value.
+  , pp :: PeekPoke k v
+  -- ^ Record of functions for peeking/poking pointers to keys and values.
   }
 
 -- | Record of functions for peeking/poking pointers to keys and values.
@@ -109,8 +120,8 @@ data CursorEnv k v = CursorEnv {
 -- enables running the @'CursorM'@ both with or without @'Serialise' k@ and
 -- @'Serialise' v@ instances. See @'runCursorTransaction'@ and
 -- @'runCursorTransaction''@.
-data PeekPoke k v = PeekPoke {
-    kPeek :: Ptr MDB_val -> IO k
+data PeekPoke k v = PeekPoke
+  { kPeek :: Ptr MDB_val -> IO k
   , vPeek :: Ptr MDB_val -> IO v
   , kPoke :: Ptr MDB_val -> k -> IO ()
   , vPoke :: Ptr MDB_val -> v -> IO ()
@@ -123,7 +134,7 @@ data PeekPoke k v = PeekPoke {
 -- perform the lower-level cursor operations.
 type CursorM :: Type -> Type -> Mode -> Type -> Type
 newtype CursorM k v mode a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
-  deriving stock (Functor)
+  deriving stock Functor
   deriving newtype (Applicative, Monad)
   deriving newtype (MonadIO, MonadReader (CursorEnv k v), MonadThrow, MonadCatch)
 
@@ -132,17 +143,20 @@ newtype CursorM k v mode a = CursorM {unCursorM :: ReaderT (CursorEnv k v) IO a}
 -- Uses implicit @'Serialise'@ constraints to fill in the @'PeekPoke'@ record
 -- that is used to peek/poke pointers to keys and values.
 runCursorAsTransaction ::
-     (Serialise k, Serialise v)
-  => CursorM k v mode a -- ^ The cursor monad to run.
-  -> Database k v       -- ^ The database to run the cursor monad in.
-  -> Transaction mode a
+  (Serialise k, Serialise v) =>
+  -- | The cursor monad to run.
+  CursorM k v mode a ->
+  -- | The database to run the cursor monad in.
+  Database k v ->
+  Transaction mode a
 runCursorAsTransaction cm (Db _ dbi) = Txn $ \txn ->
-    alloca $ \kptr ->
-      alloca $ \vptr ->
-        withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
-  where
-    pp = PeekPoke {
-        kPeek = peekMDBVal
+  alloca $ \kptr ->
+    alloca $ \vptr ->
+      withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
+ where
+  pp =
+    PeekPoke
+      { kPeek = peekMDBVal
       , vPeek = peekMDBVal
       , kPoke = pokeMDBVal
       , vPoke = pokeMDBVal
@@ -153,19 +167,22 @@ runCursorAsTransaction cm (Db _ dbi) = Txn $ \txn ->
 -- This runner requires an explicit @'PeekPoke'@ record that is used to
 -- peek/poke pointers to keys and values.
 runCursorAsTransaction' ::
-     CursorM k v mode a -- ^ The cursor monad to run.
-  -> Database k v       -- ^ The database to run the cursor monad in.
-  -> PeekPoke k v       -- ^ Peek and poke functions for values of type @k@
-                        --   and @v@.
-  -> Transaction mode a
+  -- | The cursor monad to run.
+  CursorM k v mode a ->
+  -- | The database to run the cursor monad in.
+  Database k v ->
+  -- | Peek and poke functions for values of type @k@
+  --   and @v@.
+  PeekPoke k v ->
+  Transaction mode a
 runCursorAsTransaction' cm (Db _ dbi) pp = Txn $ \txn ->
   alloca $ \kptr ->
     alloca $ \vptr ->
       withCursor txn dbi (\c -> runReaderT (unCursorM cm) (CursorEnv c kptr vptr pp))
 
 type CursorConstraints :: (Mode -> Type -> Type) -> Type -> Type -> Mode -> Constraint
-type CursorConstraints m k v mode = (
-    MonadIO (m mode)
+type CursorConstraints m k v mode =
+  ( MonadIO (m mode)
   , MonadReader (CursorEnv k v) (m mode)
   )
 
@@ -207,7 +224,8 @@ cpokeValue v = do
 
 errCursorOpNotSupported :: MDB_cursor_op -> a
 errCursorOpNotSupported op =
-  error $ "MDB_cursor_op not yet supported for cursor get operations: "
+  error $
+    "MDB_cursor_op not yet supported for cursor get operations: "
       <> show op
 
 -- | General-purpose cursor getfunction.
@@ -230,12 +248,13 @@ cgetG :: CursorConstraints m k v mode => MDB_cursor_op -> m mode (Maybe (k, v))
 cgetG op = do
   r <- ask
   found <- liftIO $ mdb_cursor_get' op (cursor r) (kPtr r) (vPtr r)
-  if found then do
-    k <- cpeekKey
-    v <- cpeekValue
-    pure $ Just (k, v)
-  else
-    pure Nothing
+  if found
+    then do
+      k <- cpeekKey
+      v <- cpeekValue
+      pure $ Just (k, v)
+    else
+      pure Nothing
 
 -- | Like @'cgetG'@, but throws away the result.
 cgetG_ :: CursorConstraints m k v mode => MDB_cursor_op -> m mode ()
@@ -246,7 +265,7 @@ cgetFirst = cgetG MDB_FIRST
 
 -- TODO(jdral): sorted duplicates not supported yet.
 _cgetFirstDup :: CursorConstraints m k v mode => m mode (Maybe (k, v))
-_cgetFirstDup  = errCursorOpNotSupported MDB_FIRST_DUP
+_cgetFirstDup = errCursorOpNotSupported MDB_FIRST_DUP
 
 -- TODO(jdral): sorted duplicates not supported yet.
 _cgetBoth :: CursorConstraints m k v mode => m mode ()
@@ -261,7 +280,7 @@ cgetCurrent = cgetG MDB_GET_CURRENT
 
 -- TODO(jdral): fixed-size, sorted duplicates not supported yet.
 _cgetMultiple :: CursorConstraints m k v mode => m mode ()
-_cgetMultiple  = errCursorOpNotSupported MDB_GET_MULTIPLE
+_cgetMultiple = errCursorOpNotSupported MDB_GET_MULTIPLE
 
 cgetLast :: CursorConstraints m k v mode => m mode (Maybe (k, v))
 cgetLast = cgetG MDB_LAST
@@ -311,12 +330,13 @@ cgetSetRange k = cpokeKey k >> cgetG MDB_SET_RANGE
 
 errPutFlagNotSupported :: CPutFlag -> a
 errPutFlagNotSupported pf =
-  error $ "CPutFlag not yet supported for cursor put operations: "
-       <> show pf
+  error $
+    "CPutFlag not yet supported for cursor put operations: "
+      <> show pf
 
 -- | Flags that control the behaviour of cursor put operations.
-data CPutFlag =
-    CPF_MDB_CURRENT
+data CPutFlag
+  = CPF_MDB_CURRENT
   | CPF_MDB_NODUPDATA
   | CPF_MDB_NOOVERWRITE
   | CPF_MDB_RESERVE
@@ -327,13 +347,13 @@ data CPutFlag =
 
 fromCPutFlag :: CPutFlag -> MDB_WriteFlag
 fromCPutFlag = \case
-  CPF_MDB_CURRENT     -> MDB_CURRENT
-  CPF_MDB_NODUPDATA   -> errPutFlagNotSupported CPF_MDB_NODUPDATA
+  CPF_MDB_CURRENT -> MDB_CURRENT
+  CPF_MDB_NODUPDATA -> errPutFlagNotSupported CPF_MDB_NODUPDATA
   CPF_MDB_NOOVERWRITE -> MDB_NOOVERWRITE
-  CPF_MDB_RESERVE     -> errPutFlagNotSupported CPF_MDB_RESERVE
-  CPF_MDB_APPEND      -> MDB_APPEND
-  CPF_MDB_APPENDDUP   -> errPutFlagNotSupported CPF_MDB_APPENDDUP
-  CPF_MDB_MULTIPLE    -> errPutFlagNotSupported CPF_MDB_MULTIPLE
+  CPF_MDB_RESERVE -> errPutFlagNotSupported CPF_MDB_RESERVE
+  CPF_MDB_APPEND -> MDB_APPEND
+  CPF_MDB_APPENDDUP -> errPutFlagNotSupported CPF_MDB_APPENDDUP
+  CPF_MDB_MULTIPLE -> errPutFlagNotSupported CPF_MDB_MULTIPLE
 
 compileCPutFlag :: Maybe CPutFlag -> MDB_WriteFlags
 compileCPutFlag = compileWriteFlags . toList . fmap fromCPutFlag
@@ -345,8 +365,8 @@ compileCPutFlag = compileWriteFlags . toList . fmap fromCPutFlag
 --
 -- http://www.lmdb.tech/doc/group__mdb.html#ga1f83ccb40011837ff37cc32be01ad91e
 cputG ::
-     CursorConstraints m k v ReadWrite
-  => Maybe CPutFlag -> k -> v -> m ReadWrite Bool
+  CursorConstraints m k v ReadWrite =>
+  Maybe CPutFlag -> k -> v -> m ReadWrite Bool
 cputG flag k v = do
   r <- ask
   cpokeKey k
@@ -355,13 +375,13 @@ cputG flag k v = do
     mdb_cursor_put_ptr' (compileCPutFlag flag) (cursor r) (kPtr r) (vPtr r)
 
 cput ::
-     CursorConstraints m k v ReadWrite
-  => k -> v -> m ReadWrite Bool
-cput = cputG   Nothing
+  CursorConstraints m k v ReadWrite =>
+  k -> v -> m ReadWrite Bool
+cput = cputG Nothing
 
 cputCurrent ::
-     CursorConstraints m k v ReadWrite
-  => k -> v -> m ReadWrite Bool
+  CursorConstraints m k v ReadWrite =>
+  k -> v -> m ReadWrite Bool
 cputCurrent = cputG $ Just CPF_MDB_CURRENT
 
 -- TODO(jdral): sorted duplicates not supported yet.
@@ -369,8 +389,8 @@ _cputNoDupData :: CursorConstraints m k v ReadWrite => m ReadWrite ()
 _cputNoDupData = errPutFlagNotSupported CPF_MDB_NODUPDATA
 
 cputNoOverwrite ::
-     CursorConstraints m k v ReadWrite
-  => k -> v -> m ReadWrite Bool
+  CursorConstraints m k v ReadWrite =>
+  k -> v -> m ReadWrite Bool
 cputNoOverwrite = cputG $ Just CPF_MDB_NOOVERWRITE
 
 -- TODO(jdral): not yet supported, needs special handling.
@@ -378,8 +398,8 @@ _cputReserve :: CursorConstraints m k v ReadWrite => m ReadWrite ()
 _cputReserve = errPutFlagNotSupported CPF_MDB_RESERVE
 
 cputAppend ::
-     CursorConstraints m k v ReadWrite
-  => k -> v -> m ReadWrite Bool
+  CursorConstraints m k v ReadWrite =>
+  k -> v -> m ReadWrite Bool
 cputAppend = cputG $ Just CPF_MDB_APPEND
 
 -- TODO(jdral): sorted duplicates not supported yet.
@@ -396,8 +416,9 @@ _cputMultiple = errPutFlagNotSupported CPF_MDB_MULTIPLE
 
 errDelFlagNotSupported :: CDelFlag -> a
 errDelFlagNotSupported df =
-  error $ "CDelFlag not yet supported for cursor put operations: "
-       <> show df
+  error $
+    "CDelFlag not yet supported for cursor put operations: "
+      <> show df
 
 -- | Flags that control the behaviour of cursor delete operations.
 data CDelFlag = CDF_MDB_NODUPDATA
@@ -435,52 +456,54 @@ _cdelNoDupData = errDelFlagNotSupported CDF_MDB_NODUPDATA
 
 -- | Strict fold over the full database.
 forEach ::
-     forall m a k v mode.
-     CursorConstraints m k v mode
-  => MDB_cursor_op
-  -> MDB_cursor_op
-  -> (a -> k -> v -> a)
-  -> a
-  -> m mode a
+  forall m a k v mode.
+  CursorConstraints m k v mode =>
+  MDB_cursor_op ->
+  MDB_cursor_op ->
+  (a -> k -> v -> a) ->
+  a ->
+  m mode a
 forEach first next f z = do
-    go first z
-  where
-    go :: MDB_cursor_op -> a -> m mode a
-    go op acc = do
-      x <- cgetG op
-      case x of
-        Just (k, v) -> let acc' = f acc k v
-                       in  acc' `seq` go next acc'
-        Nothing     -> pure acc
+  go first z
+ where
+  go :: MDB_cursor_op -> a -> m mode a
+  go op acc = do
+    x <- cgetG op
+    case x of
+      Just (k, v) ->
+        let acc' = f acc k v
+         in acc' `seq` go next acc'
+      Nothing -> pure acc
 
 -- | Strict left fold over the full database.
 forEachForward ::
-     CursorConstraints m k v mode
-  => (a -> k -> v -> a)
-  -> a
-  -> m mode a
-forEachForward  = forEach MDB_FIRST MDB_NEXT
+  CursorConstraints m k v mode =>
+  (a -> k -> v -> a) ->
+  a ->
+  m mode a
+forEachForward = forEach MDB_FIRST MDB_NEXT
 
 -- | Strict right fold over the full database.
 forEachBackward ::
-     CursorConstraints m k v mode
-  => (k -> v -> a -> a)
-  -> a
-  -> m mode a
+  CursorConstraints m k v mode =>
+  (k -> v -> a -> a) ->
+  a ->
+  m mode a
 forEachBackward f = forEach MDB_LAST MDB_PREV f'
-  where f' z k v = f k v z
+ where
+  f' z k v = f k v z
 
 cgetAll ::
-     (CursorConstraints m k v mode, Ord k)
-  => m mode (Map k v)
+  (CursorConstraints m k v mode, Ord k) =>
+  m mode (Map k v)
 cgetAll = forEachForward (\acc k v -> Map.insert k v acc) mempty
 
 data Bound = Exclusive | Inclusive
 
 -- | A @'FoldRange'@ is defined by the inclusive/exclusive lower bound of the
 -- range, and the number of keys to fold.
-data FoldRange k v = FoldRange {
-    lowerBound :: Maybe (k, Bound)
+data FoldRange k v = FoldRange
+  { lowerBound :: Maybe (k, Bound)
   , keysToFold :: Int
   }
 
@@ -497,45 +520,47 @@ data FoldRange k v = FoldRange {
 --
 -- Note: This is a strict left fold.
 cfoldM ::
-     forall m b k v mode.
-     (CursorConstraints m k v mode, Ord k)
-  => (b -> k -> v -> (m mode) b)
-  -> b
-  -> FoldRange k v
-  -> m mode b
+  forall m b k v mode.
+  (CursorConstraints m k v mode, Ord k) =>
+  (b -> k -> v -> (m mode) b) ->
+  b ->
+  FoldRange k v ->
+  m mode b
 cfoldM f z FoldRange{lowerBound = lb, keysToFold = n}
-    | n <= 0    = pure z
-    | otherwise = do
-        kvMay <- cgetInitial
-        case kvMay of
-          Nothing ->
-            pure z
-          Just (k, v) -> do
-            !z'  <- f z k v
-            !z'' <- foldM f' z' [1..n-1]
-            pure z''
-  where
-    cgetInitial :: m mode (Maybe (k, v))
-    cgetInitial = maybe cgetFirst (uncurry cgetSetRange') lb
-
-    -- Like @'cgetSetRange'@, but may skip the first read key if the the lower
-    -- bound is exclusive and @k@ is the first key that was read from the
-    -- database.
-    cgetSetRange' :: k -> Bound -> m mode (Maybe (k, v))
-    cgetSetRange' k b = do
-      k2vMay <- cgetSetRange k
-      case k2vMay of
-        Nothing                       -> pure Nothing
-        Just (k2, v) | k == k2
-                     , Exclusive <- b -> cgetNext
-                     | otherwise      -> pure $ Just (k2, v)
-
-    f' :: b -> Int -> m mode b
-    f' !acc _ = do
-      kvMay <- cgetNext
+  | n <= 0 = pure z
+  | otherwise = do
+      kvMay <- cgetInitial
       case kvMay of
-        Nothing     -> pure acc
-        Just (k, v) -> f acc k v
+        Nothing ->
+          pure z
+        Just (k, v) -> do
+          !z' <- f z k v
+          !z'' <- foldM f' z' [1 .. n - 1]
+          pure z''
+ where
+  cgetInitial :: m mode (Maybe (k, v))
+  cgetInitial = maybe cgetFirst (uncurry cgetSetRange') lb
+
+  -- Like @'cgetSetRange'@, but may skip the first read key if the the lower
+  -- bound is exclusive and @k@ is the first key that was read from the
+  -- database.
+  cgetSetRange' :: k -> Bound -> m mode (Maybe (k, v))
+  cgetSetRange' k b = do
+    k2vMay <- cgetSetRange k
+    case k2vMay of
+      Nothing -> pure Nothing
+      Just (k2, v)
+        | k == k2
+        , Exclusive <- b ->
+            cgetNext
+        | otherwise -> pure $ Just (k2, v)
+
+  f' :: b -> Int -> m mode b
+  f' !acc _ = do
+    kvMay <- cgetNext
+    case kvMay of
+      Nothing -> pure acc
+      Just (k, v) -> f acc k v
 
 -- | @'cgetMany' lbMay n@ reads a range of @n@ key-value pairs given an
 -- inclusive/exclusive lower bound on keys to read.
@@ -543,25 +568,25 @@ cfoldM f z FoldRange{lowerBound = lb, keysToFold = n}
 -- Uses `cfoldM` to perform the range read using a monadic fold. See @'cfoldM'@
 -- and @'FoldRange'@ for specifics on how ranges are folded.
 cgetMany ::
-     forall m k v mode.
-     (CursorConstraints m k v mode, Ord k)
-  => Maybe (k, Bound)
-  -> Int
-  -> m mode (Map k v)
+  forall m k v mode.
+  (CursorConstraints m k v mode, Ord k) =>
+  Maybe (k, Bound) ->
+  Int ->
+  m mode (Map k v)
 cgetMany lbMay n = cfoldM f Map.empty (FoldRange lbMay n)
-  where
-    f :: Map k v -> k -> v -> m mode (Map k v)
-    f m k v = pure $ Map.insert k v m
+ where
+  f :: Map k v -> k -> v -> m mode (Map k v)
+  f m k v = pure $ Map.insert k v m
 
--- | This variant of @'cgetMany'@ is intended to be used if the serialised form 
+-- | This variant of @'cgetMany'@ is intended to be used if the serialised form
 -- of @k@ has a different order than the one imposed by @Ord k@.
 cgetManyAndLast ::
-     forall m k v mode.
-     (CursorConstraints m k v mode, Ord k)
-  => Maybe (k, Bound)
-  -> Int
-  -> m mode (Map k v, Maybe k)
+  forall m k v mode.
+  (CursorConstraints m k v mode, Ord k) =>
+  Maybe (k, Bound) ->
+  Int ->
+  m mode (Map k v, Maybe k)
 cgetManyAndLast lbMay n = cfoldM f (Map.empty, Nothing) (FoldRange lbMay n)
-  where
-    f :: (Map k v, Maybe k) -> k -> v -> m mode (Map k v, Maybe k)
-    f (!m, _) k v = pure (Map.insert k v m, Just k)
+ where
+  f :: (Map k v, Maybe k) -> k -> v -> m mode (Map k v, Maybe k)
+  f (!m, _) k v = pure (Map.insert k v m, Just k)

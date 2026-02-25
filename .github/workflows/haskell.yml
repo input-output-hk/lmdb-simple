@@ -23,19 +23,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10", "9.2", "9.4", "9.6", "9.8", "9.10", "9.12"]
-        cabal: ["3.12.1.0"]
+        ghc: ["9.6", "9.8", "9.10", "9.12", "9.14"]
+        cabal: ["3.16.1.0"]
         sys:
           - { os: windows-latest, shell: "C:/msys64/usr/bin/bash.exe -e {0}" }
           - { os: ubuntu-latest, shell: bash }
           - { os: macos-latest, shell: bash }
-        exclude:
-        - ghc: "8.10"
-          sys: { os: macos-latest, shell: bash }
-        include:
-        - ghc: "8.10"
-          cabal: "3.12.1.0"
-          sys: { os: macos-13, shell: bash }
 
     defaults:
       run:
@@ -120,3 +113,129 @@ jobs:
     - name: Run tests
       run: |
         cabal test -j1 all
+
+
+  # Check formatting for Haskell files
+  fourmolu:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ["9.12.2"]
+        cabal: ["3.16.1.0"]
+        os: [ubuntu-latest]
+
+    # We use this environment variable in the primary key of our caches, and as
+    # an argument to cabal install. This ensures that we never rebuild
+    # dependencies because of newly uploaded packages unless we want to.
+    env:
+      hackage-index-state: "2026-02-23T23:13:53Z"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Install system dependencies (apt-get)
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install fd-find
+
+    - name: Setup Haskell
+      id: setup-haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+        cabal-update: false
+
+    - name: Cabal update
+      run: cabal update
+
+    - name: Setup cabal bin path
+      run: echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+
+    - name: Cache cabal store
+      uses: actions/cache@v4
+      env:
+        cache-name: cache-fourmolu
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ env.hackage-index-state }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
+
+    - name: Install fourmolu
+      run: cabal install --ignore-project --index-state="${{ env.hackage-index-state }}" fourmolu-0.19.0.1
+
+    - name: Record fourmolu version
+      run: |
+        which fourmolu
+        fourmolu --version
+
+    - name: Run fourmolu
+      run: |
+        ./scripts/format-fourmolu.sh
+        git diff --exit-code
+
+  # Check formatting for cabal files
+  cabal-gild:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ["9.12.2"]
+        cabal: ["3.16.1.0"]
+        os: [ubuntu-latest]
+
+    # See the comment on the hackage-index-state environment variable for the
+    # stylish-haskell job.
+    env:
+      hackage-index-state: "2026-02-23T23:13:53Z"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Install system dependencies (apt-get)
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install fd-find
+
+    - name: Setup Haskell
+      id: setup-haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+        cabal-update: false
+
+    - name: Cabal update
+      run: cabal update
+
+    - name: Setup cabal bin path
+      run: echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+
+    - name: Cache cabal store
+      uses: actions/cache@v4
+      env:
+        cache-name: cache-cabal-cabal-gild
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ env.hackage-index-state }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
+
+    - name: Install cabal-gild
+      run: cabal install --ignore-project cabal-gild-1.7.0.1 --index-state="${{ env.hackage-index-state }}"
+
+    - name: Record cabal-gild version
+      run: |
+        which cabal-gild
+        cabal-gild --version
+
+    - name: Run cabal-gild
+      run: |
+        ./scripts/format-cabal.sh
+        git diff --exit-code

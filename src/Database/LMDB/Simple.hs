@@ -1,54 +1,51 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
-{-|
-Module      : Database.LMDB.Simple
-Description : Simple Haskell API for LMDB
-Copyright   : © 2017–2018 Robert Leslie
-License     : BSD3
-Maintainer  : rob@mars.org
-Stability   : experimental
-
-This module provides a simple Haskell API for the
-<https://symas.com/lightning-memory-mapped-database/ Lightning Memory-mapped Database>
-(LMDB).
-
-Example usage:
-
-@
-module Main where
-
-import Database.LMDB.Simple
-import Control.Monad (forM_)
-
-main = do
-  env <- openEnvironment "myenv" defaultLimits
-  db <- readOnlyTransaction env $ getDatabase Nothing :: IO (Database String Int)
-
-  transaction env $
-    forM_ [("one",1),("two",2),("three",3)] $ \\(k,v) -> put db k (Just v)
-
-  print =<< readOnlyTransaction env (get db "two")   -- Just 2
-  print =<< readOnlyTransaction env (get db "nine")  -- Nothing
-@
-
-These additional APIs are available:
-
-  * "Database.LMDB.Simple.Extra" provides additional functions for querying
-    and modifying LMDB databases from within the 'Transaction' monad
-
-  * "Database.LMDB.Simple.View" provides a read-only snapshot of an LMDB
-    database that can be accessed from pure code
-
-  * "Database.LMDB.Simple.DBRef" provides a mutable variable (accessed from
-    'IO') that is tied to a particular key that persists in an LMDB database
--}
-
+-- |
+-- Module      : Database.LMDB.Simple
+-- Description : Simple Haskell API for LMDB
+-- Copyright   : © 2017–2018 Robert Leslie
+-- License     : BSD3
+-- Maintainer  : rob@mars.org
+-- Stability   : experimental
+--
+-- This module provides a simple Haskell API for the
+-- <https://symas.com/lightning-memory-mapped-database/ Lightning Memory-mapped Database>
+-- (LMDB).
+--
+-- Example usage:
+--
+-- @
+-- module Main where
+--
+-- import Database.LMDB.Simple
+-- import Control.Monad (forM_)
+--
+-- main = do
+--   env <- openEnvironment "myenv" defaultLimits
+--   db <- readOnlyTransaction env $ getDatabase Nothing :: IO (Database String Int)
+--
+--   transaction env $
+--     forM_ [("one",1),("two",2),("three",3)] $ \\(k,v) -> put db k (Just v)
+--
+--   print =<< readOnlyTransaction env (get db "two")   -- Just 2
+--   print =<< readOnlyTransaction env (get db "nine")  -- Nothing
+-- @
+--
+-- These additional APIs are available:
+--
+--   * "Database.LMDB.Simple.Extra" provides additional functions for querying
+--     and modifying LMDB databases from within the 'Transaction' monad
+--
+--   * "Database.LMDB.Simple.View" provides a read-only snapshot of an LMDB
+--     database that can be accessed from pure code
+--
+--   * "Database.LMDB.Simple.DBRef" provides a mutable variable (accessed from
+--     'IO') that is tied to a particular key that persists in an LMDB database
 module Database.LMDB.Simple
   ( -- * Environments
     Environment
@@ -87,71 +84,62 @@ module Database.LMDB.Simple
   ) where
 
 import Control.Concurrent.Async
-  ( withAsyncBound
-  , wait
+  ( wait
+  , withAsyncBound
   )
-
 import Control.Concurrent.MVar
-
 import Control.Exception
-  ( SomeException
-  , Exception
+  ( Exception
+  , SomeException
+  , bracketOnError
   , throwIO
   , try
   , tryJust
-  , bracketOnError
   )
-
 import qualified Control.Exception as EUnsafe
-
 import Control.Monad
   ( guard
   , void
   )
-
 import Control.Monad.IO.Unlift
   ( MonadUnliftIO (..)
   )
-
 import Data.Coerce
   ( coerce
   )
-
 import Database.LMDB.Raw
   ( LMDB_Error (LMDB_Error, e_code)
-  , MDB_EnvFlag (MDB_NOSUBDIR, MDB_RDONLY)
   , MDB_DbFlag (MDB_CREATE)
-  , mdb_env_create
+  , MDB_EnvFlag (MDB_NOSUBDIR, MDB_RDONLY)
+  , mdb_clear'
+  , mdb_dbi_open'
   , mdb_env_close
   , mdb_env_copy
+  , mdb_env_create
   , mdb_env_get_path
   , mdb_env_open
   , mdb_env_set_mapsize
   , mdb_env_set_maxdbs
   , mdb_env_set_maxreaders
-  , mdb_dbi_open'
+  , mdb_reader_check
+  , mdb_txn_abort
   , mdb_txn_begin
   , mdb_txn_commit
-  , mdb_txn_abort
   , mdb_txn_env
-  , mdb_clear'
-  , mdb_reader_check
   )
-
 import Database.LMDB.Simple.Internal
-  ( Mode (..)
-  , IsMode
-  , SubMode
+  ( Database (Db)
   , Environment (Env)
-  , Transaction (Txn)
-  , Database (Db)
+  , IsMode
+  , Mode (..)
   , Serialise
+  , SubMode
+  , Transaction (Txn)
   , isReadOnlyEnvironment
   , isReadOnlyTransaction
   , isReadWriteTransaction
   )
 import qualified Database.LMDB.Simple.Internal as Internal
-
 import Foreign.C
   ( Errno (Errno)
   , eNOTDIR
@@ -171,7 +159,7 @@ bracket2 before afterE afterR thing = withRunInIO $ \run -> EUnsafe.mask $ \rest
       --
       -- https://github.com/fpco/safe-exceptions/issues/2
       _ :: Either SomeException b <-
-          EUnsafe.try $ EUnsafe.uninterruptibleMask_ $ run $ afterE x
+        EUnsafe.try $ EUnsafe.uninterruptibleMask_ $ run $ afterE x
       EUnsafe.throwIO e1
     Right y -> do
       _ <- EUnsafe.uninterruptibleMask_ $ run $ afterR x
@@ -180,12 +168,15 @@ bracket2 before afterE afterR thing = withRunInIO $ \run -> EUnsafe.mask $ \rest
 -- | LMDB environments have various limits on the size and number of databases
 -- and concurrent readers.
 data Limits = Limits
-  { mapSize      :: Int  -- ^ memory map size, in bytes (also the maximum size
-                         -- of all databases)
-  , maxDatabases :: Int  -- ^ maximum number of named databases
-  , maxReaders   :: Int  -- ^ maximum number of concurrent 'ReadOnly'
-                         -- transactions (also the number of slots in the lock
-                         -- table)
+  { mapSize :: Int
+  -- ^ memory map size, in bytes (also the maximum size
+  -- of all databases)
+  , maxDatabases :: Int
+  -- ^ maximum number of named databases
+  , maxReaders :: Int
+  -- ^ maximum number of concurrent 'ReadOnly'
+  -- transactions (also the number of slots in the lock
+  -- table)
   }
   deriving stock (Show, Eq)
 
@@ -207,11 +198,12 @@ data Limits = Limits
 -- you do not need to change this field if you are only going to use the
 -- single main (unnamed) database.
 defaultLimits :: Limits
-defaultLimits = Limits
-  { mapSize      = 1024 * 1024  -- 1 MiB
-  , maxDatabases = 0
-  , maxReaders   = 126
-  }
+defaultLimits =
+  Limits
+    { mapSize = 1024 * 1024 -- 1 MiB
+    , maxDatabases = 0
+    , maxReaders = 126
+    }
 
 -- | Open an LMDB environment in either 'ReadWrite' or 'ReadOnly' mode. The
 -- 'FilePath' argument may be either a directory or a regular file, but it
@@ -225,9 +217,9 @@ defaultLimits = Limits
 -- table (except when the filesystem is read-only, in which case no locks are
 -- used).
 openEnvironment :: forall mode. IsMode mode => FilePath -> Limits -> IO (Environment mode)
-openEnvironment = openEnvironmentWithFlags flags where
+openEnvironment = openEnvironmentWithFlags flags
+ where
   flags = [MDB_RDONLY | isReadOnlyEnvironment (undefined :: Environment mode)]
-
 
 -- | As 'openEnvironment' but using explicit LMDB environment flags.
 -- No effort is made to validate the flags.
@@ -235,23 +227,23 @@ openEnvironmentWithFlags :: [MDB_EnvFlag] -> FilePath -> Limits -> IO (Environme
 openEnvironmentWithFlags flags path limits = do
   env <- mdb_env_create
 
-  mdb_env_set_mapsize    env (mapSize      limits)
-  mdb_env_set_maxdbs     env (maxDatabases limits)
-  mdb_env_set_maxreaders env (maxReaders   limits)
+  mdb_env_set_mapsize env (mapSize limits)
+  mdb_env_set_maxdbs env (maxDatabases limits)
+  mdb_env_set_maxreaders env (maxReaders limits)
 
   let environ = Env env :: Environment mode
 
   r <- tryJust (guard . isNotDirectoryError) $ mdb_env_open env path flags
   case r of
-    Left  _ -> mdb_env_open env path (MDB_NOSUBDIR : flags)
+    Left _ -> mdb_env_open env path (MDB_NOSUBDIR : flags)
     Right _ -> return ()
 
   return environ
-
-  where isNotDirectoryError :: LMDB_Error -> Bool
-        isNotDirectoryError LMDB_Error { e_code = Left code }
-          | Errno code == eNOTDIR = True
-        isNotDirectoryError _     = False
+ where
+  isNotDirectoryError :: LMDB_Error -> Bool
+  isNotDirectoryError LMDB_Error{e_code = Left code}
+    | Errno code == eNOTDIR = True
+  isNotDirectoryError _ = False
 
 -- | Version of @runInBoundThread@ that may be safely interrupted.
 --
@@ -325,13 +317,15 @@ getPathEnvironment (Env env) = mdb_env_get_path env
 -- transactions, and thus the database can grow quickly. 'ReadWrite'
 -- transactions prevent other 'ReadWrite' transactions, since writes are
 -- serialized.
-transaction :: (IsMode tmode, SubMode emode tmode)
-            => Environment emode -> Transaction tmode a -> IO a
+transaction ::
+  (IsMode tmode, SubMode emode tmode) =>
+  Environment emode -> Transaction tmode a -> IO a
 transaction (Env env) tx@(Txn tf)
   | isReadOnlyTransaction tx = run True
-  | otherwise                = runInBoundThread' (run False)
-  where run readOnly =
-          bracket2 (mdb_txn_begin env Nothing readOnly) mdb_txn_abort mdb_txn_commit tf
+  | otherwise = runInBoundThread' (run False)
+ where
+  run readOnly =
+    bracket2 (mdb_txn_begin env Nothing readOnly) mdb_txn_abort mdb_txn_commit tf
 
 -- | The exception type thrown when a (top-level) transaction is explicitly
 -- aborted
@@ -344,14 +338,18 @@ instance Exception AbortedTransaction
 
 -- | Convenience function for performing a top-level 'ReadWrite' transaction;
 -- see 'transaction'
-readWriteTransaction :: Environment ReadWrite
-                     -> Transaction ReadWrite a -> IO a
+readWriteTransaction ::
+  Environment ReadWrite ->
+  Transaction ReadWrite a ->
+  IO a
 readWriteTransaction = transaction
 
 -- | Convenience function for performing a top-level 'ReadOnly' transaction;
 -- see 'transaction'
-readOnlyTransaction :: Environment mode
-                    -> Transaction ReadOnly a -> IO a
+readOnlyTransaction ::
+  Environment mode ->
+  Transaction ReadOnly a ->
+  IO a
 readOnlyTransaction = transaction
 
 -- | Nest a transaction within the current 'ReadWrite' transaction.
@@ -365,13 +363,17 @@ readOnlyTransaction = transaction
 -- An exception will cause the nested transaction to be implicitly aborted.
 nestTransaction :: Transaction ReadWrite a -> Transaction ReadWrite (Maybe a)
 nestTransaction (Txn tf) = Txn $ \ptxn ->
-  let env = mdb_txn_env ptxn in maybeAborted $
-  bracketOnError (mdb_txn_begin env (Just ptxn) False) mdb_txn_abort $
-  \ctxn -> tf ctxn >>= \result -> mdb_txn_commit ctxn >> return result
-
-  where maybeAborted :: IO a -> IO (Maybe a)
-        maybeAborted io = either
-          (\e -> let _ = e :: AbortedTransaction in Nothing) Just <$> try io
+  let env = mdb_txn_env ptxn
+   in maybeAborted $
+        bracketOnError (mdb_txn_begin env (Just ptxn) False) mdb_txn_abort $
+          \ctxn -> tf ctxn >>= \result -> mdb_txn_commit ctxn >> return result
+ where
+  maybeAborted :: IO a -> IO (Maybe a)
+  maybeAborted io =
+    either
+      (\e -> let _ = e :: AbortedTransaction in Nothing)
+      Just
+      <$> try io
 
 -- | Explicitly abort the current transaction, nullifying its effects on the
 -- LMDB environment. No further actions will be performed within the
@@ -407,19 +409,22 @@ transactionWithRunInIO inner = Txn $ \txn -> inner (\(Txn tf) -> tf txn)
 -- use in future transactions.
 getDatabase :: IsMode mode => Maybe String -> Transaction mode (Database k v)
 getDatabase name = tx
-  where tx = Txn $ \txn -> Db (mdb_txn_env txn) <$> mdb_dbi_open' txn name flags
-        flags = [MDB_CREATE | isReadWriteTransaction tx]
+ where
+  tx = Txn $ \txn -> Db (mdb_txn_env txn) <$> mdb_dbi_open' txn name flags
+  flags = [MDB_CREATE | isReadWriteTransaction tx]
 
 -- | Lookup a key in a database and return the corresponding value, or return
 -- 'Nothing' if the key does not exist in the database.
-get :: (Serialise k, Serialise v)
-    => Database k v -> k -> Transaction mode (Maybe v)
+get ::
+  (Serialise k, Serialise v) =>
+  Database k v -> k -> Transaction mode (Maybe v)
 get = Internal.get
 
 -- | Insert the given key/value pair into a database, or delete the key from
 -- the database if 'Nothing' is given for the value.
-put :: (Serialise k, Serialise v)
-    => Database k v -> k -> Maybe v -> Transaction ReadWrite ()
+put ::
+  (Serialise k, Serialise v) =>
+  Database k v -> k -> Maybe v -> Transaction ReadWrite ()
 put db key = maybe (void $ Internal.delete db key) (Internal.put db key)
 
 -- | Delete all key/value pairs from a database, leaving the database empty.
