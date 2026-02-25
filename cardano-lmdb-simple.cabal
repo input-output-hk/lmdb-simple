@@ -39,7 +39,7 @@ library
                        Database.LMDB.Simple.View
 
   build-depends:       async
-                     , base >= 4.14 && < 4.22
+                     , base >= 4.14 && < 4.23
                      , bytestring >= 0.10 && < 0.13
                      , containers
                      , exceptions
@@ -78,7 +78,7 @@ test-suite test-cursors
                      , mtl
                      , QuickCheck
                      , quickcheck-dynamic
-                     , quickcheck-lockstep >= 0.2
+                     , quickcheck-lockstep >= 0.8
                      , serialise
                      , tasty
                      , tasty-hunit

@@ -17,3 +17,40 @@ index-state:
 
 packages:
   .
+
+if impl (ghc >= 9.14)
+  constraints:
+    , containers >= 0.8
+
+-- cabal-allow-newer
+if impl (ghc >= 9.14)
+  allow-newer:
+    , aeson:containers
+    , aeson:indexed-traversable
+    , aeson:semialign
+    , aeson:template-haskell
+    , aeson:time
+    , aeson:uuid-types
+    , binary:containers
+    , binary-orphans:base
+    , boring:base
+    , cardano-lmdb:base
+    , cborg:base
+    , cborg:containers
+    , criterion:aeson
+    , criterion:microstache
+    , criterion:template-haskell
+    , indexed-traversable:base
+    , indexed-traversable:containers
+    , indexed-traversable-instances:base
+    , microstache:aeson
+    , microstache:base
+    , microstache:containers
+    , quickcheck-lockstep:base
+    , semialign:base
+    , semialign:containers
+    , serialise:base
+    , serialise:containers
+    , template-haskell:base
+    , these:base
+    , uuid-types:template-haskell
