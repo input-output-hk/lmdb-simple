@@ -1,22 +1,26 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
-module Bench.Utils (
-    -- * Environment types
+module Bench.Utils
+  ( -- * Environment types
     BenchEnv (..)
+
     -- * Initialisation and cleanup for environments
   , initBenchEnv
   , cleanupBenchEnv
+
     -- * Defaults for LMDB Limits
   , simpleLMDBLimits
+
     -- * Defaults for database population
   , noPopulateDb
   , populateDbUnique
+
     -- * Default types for keys and values
   , Key (..)
   , Value (..)
@@ -27,30 +31,28 @@ module Bench.Utils (
   , valueSize
   ) where
 
-import           Codec.Serialise
-import           Control.DeepSeq
-import           Control.Monad
-import           Control.Monad.IO.Class
-import qualified Data.ByteString.Short         as B (ShortByteString, pack)
-import           Data.Proxy
-import           Data.Word
-import           GHC.Generics                  (Generic)
-import           System.Directory
-import           System.IO.Temp
-
-import           Test.Tasty.QuickCheck
-
-import           Database.LMDB.Simple
+import Codec.Serialise
+import Control.DeepSeq
+import Control.Monad
+import Control.Monad.IO.Class
+import qualified Data.ByteString.Short as B (ShortByteString, pack)
+import Data.Proxy
+import Data.Word
+import Database.LMDB.Simple
 import qualified Database.LMDB.Simple.Internal as Internal (putNoOverwrite)
+import GHC.Generics (Generic)
+import System.Directory
+import System.IO.Temp
+import Test.Tasty.QuickCheck
 
 {-------------------------------------------------------------------------------
   Environment types
 -------------------------------------------------------------------------------}
 
-data BenchEnv k v = BenchEnv {
-    dbFilePath :: FilePath
-  , dbEnv      :: Environment ReadWrite
-  , db         :: Database k v
+data BenchEnv k v = BenchEnv
+  { dbFilePath :: FilePath
+  , dbEnv :: Environment ReadWrite
+  , db :: Database k v
   }
 
 -- TODO: The @'dbEnv'@ and @'db'@ fields of @'BenchEnv'@ consist mainly of
@@ -67,20 +69,20 @@ instance NFData (BenchEnv k v) where
 -------------------------------------------------------------------------------}
 
 initBenchEnv ::
-     (MonadIO m, Serialise k, Serialise v, Arbitrary k, Arbitrary v)
-  => Proxy k
-  -> Proxy v
-  -> Limits
-     -- ^ LMDB limits such as maximum database size.
-  -> (Database k v -> Transaction ReadWrite ())
-     -- ^ Action that populate the database
-  -> m (BenchEnv k v)
+  (MonadIO m, Serialise k, Serialise v, Arbitrary k, Arbitrary v) =>
+  Proxy k ->
+  Proxy v ->
+  -- | LMDB limits such as maximum database size.
+  Limits ->
+  -- | Action that populate the database
+  (Database k v -> Transaction ReadWrite ()) ->
+  m (BenchEnv k v)
 initBenchEnv _ _ limits populate = do
   dbFilePath <- createDbDir
   dbEnv <- liftIO $ openEnvironment dbFilePath limits
   db <- liftIO $ readWriteTransaction dbEnv (getDatabase Nothing)
   void $ liftIO $ readWriteTransaction dbEnv $ populate db
-  pure BenchEnv {dbFilePath, dbEnv, db}
+  pure BenchEnv{dbFilePath, dbEnv, db}
 
 createDbDir :: MonadIO m => m FilePath
 createDbDir = do
@@ -125,23 +127,26 @@ noPopulateDb _ = pure ()
 -- keep track of the smallest key that is not yet in the DB, such that we can
 -- use that key if a clash occurs. This w
 populateDbUnique ::
-     ( Serialise k, Serialise v
-     , Arbitrary k, Arbitrary v
-     , Ord k
-     )
-  => Int
-  -> Database k v
-  -> Transaction ReadWrite ()
+  ( Serialise k
+  , Serialise v
+  , Arbitrary k
+  , Arbitrary v
+  , Ord k
+  ) =>
+  Int ->
+  Database k v ->
+  Transaction ReadWrite ()
 populateDbUnique n db
-  | n <= 0           = pure ()
-  | otherwise        = do
+  | n <= 0 = pure ()
+  | otherwise = do
       k <- liftIO $ generate arbitrary
       v <- liftIO $ generate arbitrary
       b <- Internal.putNoOverwrite db k v
-      if b then
-        populateDbUnique (n - 1) db
-      else
-        populateDbUnique n db
+      if b
+        then
+          populateDbUnique (n - 1) db
+        else
+          populateDbUnique n db
 
 {-------------------------------------------------------------------------------
   Default types for keys and values

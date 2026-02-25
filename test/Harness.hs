@@ -13,10 +13,13 @@ setup :: String -> IO (Environment ReadWrite, Database Int String, FilePath)
 setup name = do
   sysTmpDir <- getCanonicalTemporaryDirectory
   tmpDir <- createTempDirectory sysTmpDir name
-  env <- openEnvironment tmpDir defaultLimits
-         { mapSize      = 1024 * 1024 * 1024
-         , maxDatabases = 4
-         }
+  env <-
+    openEnvironment
+      tmpDir
+      defaultLimits
+        { mapSize = 1024 * 1024 * 1024
+        , maxDatabases = 4
+        }
   db <- readOnlyTransaction env (getDatabase Nothing)
   return (env, db, tmpDir)
 
