@@ -134,7 +134,6 @@ initState = CursorState {
 -------------------------------------------------------------------------------}
 
 type RealMonad k v mode = CursorM k v mode
-type instance Realized (CursorM k v mode) a = a
 
 type CursorAct k v a = Action (Lockstep (CursorState k v)) (Either Err a)
 
@@ -288,7 +287,7 @@ instance (Show k, Show v, Eq k, Eq v, Ord k, Typeable k, Typeable v
   observeReal ::
        Proxy (RealMonad k v ReadWrite)
     -> LockstepAction (CursorState k v) a
-    -> Realized (RealMonad k v ReadWrite) a
+    -> a
     -> Observable (CursorState k v) a
   observeReal _proxy = \case
       CursorGet{}         -> OEither . bimap OId OId
@@ -461,8 +460,8 @@ instance InterpretOp Op (ModelValue (CursorState k v)) where
 runCM ::
      (Serialise k, Serialise v)
   => LockstepAction (CursorState k v) a
-  -> LookUp (RealMonad k v mode)
-  -> RealMonad k v ReadWrite (Realized (RealMonad k v mode) a)
+  -> LookUp
+  -> RealMonad k v ReadWrite a
 runCM act _lookUp = case act of
   CursorGet op        -> catchErr $ cgetG op
   CursorGetSet k      -> catchErr $ cgetSet k
